@@ -47,6 +47,7 @@ impl Half {
         Self::clear_temporary_rerolls(game_state);
         game_state.home.clear_friends_with_the_ref();
         game_state.away.clear_friends_with_the_ref();
+        game_state.clear_temporary_skill_from_all_players(TemporarySkill::Stab);
         game_state.info.kicking_this_drive = kicking_team;
 
         let procs: Vec<AnyProc> = vec![
