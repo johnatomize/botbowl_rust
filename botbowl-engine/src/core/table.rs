@@ -70,6 +70,11 @@ pub enum Skill {
     Stab,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum TemporarySkill {
+    Stab
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum NumBlockDices {
     ThreeUphill,

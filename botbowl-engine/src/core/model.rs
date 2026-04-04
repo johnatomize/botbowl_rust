@@ -12,7 +12,7 @@ use super::gamestate::GameState;
 use super::pathing::Node;
 use super::procedures::AnyProc;
 use super::table::{ArgueTheCall, NumBlockDices, PlayerRole, PosAT, SimpleAT, Skill};
-use crate::core::table;
+use crate::core::table::{self, TemporarySkill};
 
 pub type PlayerID = usize;
 pub type DugoutPlayerID = usize;
@@ -345,6 +345,7 @@ pub struct PlayerStats {
     pub av: u8,
     pub team: TeamType,
     skills: HashSet<Skill>,
+    temporary_skills: HashSet<TemporarySkill>,
     pub role: PlayerRole,
     //skills: [Option<table::Skill>; 3],
     //injuries
@@ -359,6 +360,7 @@ impl PlayerStats {
             av: 8,
             team,
             skills: HashSet::new(),
+            temporary_skills: HashSet::new(),
             role: PlayerRole::Lineman,
             pass: D6Target::FourPlus,
         }
@@ -371,6 +373,7 @@ impl PlayerStats {
             av: 9,
             team,
             skills: HashSet::from_iter([Skill::Block]),
+            temporary_skills: HashSet::new(),
             role: PlayerRole::Blitzer,
             pass: D6Target::FourPlus,
         }
@@ -383,6 +386,7 @@ impl PlayerStats {
             av: 8,
             team,
             skills: HashSet::from_iter([Skill::Dodge, Skill::Catch]),
+            temporary_skills: HashSet::new(),
             role: PlayerRole::Catcher,
             pass: D6Target::FivePlus,
         }
@@ -395,12 +399,22 @@ impl PlayerStats {
             av: 8,
             team,
             skills: HashSet::from_iter([Skill::SureHands, Skill::Throw]),
+            temporary_skills: HashSet::new(),
             role: PlayerRole::Thrower,
             pass: D6Target::TwoPlus,
         }
     }
     pub fn give_skill(&mut self, skill: Skill) {
         self.skills.insert(skill);
+    }
+    pub fn give_temporary_skill(&mut self, temporary_skill: TemporarySkill) {
+        self.temporary_skills.insert(temporary_skill);
+    }
+    pub fn has_temporary_skill(&self, temporary_skill: TemporarySkill) -> bool {
+        self.temporary_skills.contains(&temporary_skill)
+    }
+    pub fn remove_temporary_skill(&mut self, skill: TemporarySkill) {
+        self.temporary_skills.remove(&skill);
     }
 }
 
@@ -490,6 +504,9 @@ impl FieldedPlayer {
     }
     pub fn has_skill(&self, skill: Skill) -> bool {
         self.stats.skills.contains(&skill)
+    }
+    pub fn has_temporary_skill(&self, temporary_skill: TemporarySkill) -> bool {
+        self.stats.has_temporary_skill(temporary_skill)
     }
     pub fn use_skill(&mut self, skill: Skill) {
         let not_present_before = self.used_skills.insert(skill);

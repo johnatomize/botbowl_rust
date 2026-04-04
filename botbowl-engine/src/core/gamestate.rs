@@ -9,7 +9,7 @@ use std::{
     collections::{HashSet, VecDeque},
 };
 
-use crate::core::{bb_errors::EmptyProcStackError, dices::D16, model, procedures::CoinToss};
+use crate::core::{bb_errors::EmptyProcStackError, dices::D16, model, procedures::CoinToss, table::TemporarySkill};
 
 use model::*;
 
@@ -874,6 +874,16 @@ impl GameState {
     ) -> impl Iterator<Item = &FieldedPlayer> {
         self.get_players_on_pitch()
             .filter(move |p| p.stats.team == team)
+    }
+    pub fn clear_temporary_skill_from_all_players(&mut self, temporary_skill: TemporarySkill) {
+        self.fielded_players
+            .iter_mut()
+            .flatten()
+            .for_each(|player| player.stats.remove_temporary_skill(temporary_skill));
+        self.dugout_players
+            .iter_mut()
+            .flatten()
+            .for_each(|player| player.stats.remove_temporary_skill(temporary_skill));
     }
     pub fn add_new_player_to_field(
         &mut self,
