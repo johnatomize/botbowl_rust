@@ -31,7 +31,7 @@ impl Procedure for PrayersToNuffle {
             D16::Two => {
                 // Todo: implement Friends with the ref. The rules for Friends with the Ref are:
                 // Until the end of this drive, you may treat a roll of 5 or 6 on the Argue the Call table as a
-                // WellWhenYouPutItLikeThat result and a roll of 2-4 as an “I Don’t Care!” result
+                // WellWhenYouPutItLikeThat result and a roll of 2-4 as an IDontCare result
             }
             D16::Three => {
                 //Todo: implement Stiletto. The rules for Stiletto are: 
@@ -112,7 +112,6 @@ pub struct TrapdoorCheck {
     target: D6Target,
     on_safe_procs: Vec<AnyProc>,
 }
-
 impl TrapdoorCheck {
     pub fn new(id: PlayerID, target: D6Target) -> AnyProc {
         Self::new_with_on_safe_procs(id, target, Vec::new())
@@ -130,7 +129,6 @@ impl TrapdoorCheck {
         })
     }
 }
-
 impl Procedure for TrapdoorCheck {
     fn step(&mut self, game_state: &mut GameState, input: ProcInput) -> ProcState {
         if !game_state.info.trapdoors_active {
@@ -160,5 +158,25 @@ impl Procedure for TrapdoorCheck {
             }
             _ => panic!("Unexpected input {:?}", input),
         }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FirendsWithTheRef {}
+impl FirendsWithTheRef {
+    pub fn new() -> AnyProc { AnyProc::FirendsWithTheRef(FirendsWithTheRef {}) }
+}
+impl Procedure for FirendsWithTheRef {
+    fn step(&mut self, game_state: &mut GameState, input: ProcInput) -> ProcState {
+        
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+
+    mod friends_with_the_ref {
+        
     }
 }
