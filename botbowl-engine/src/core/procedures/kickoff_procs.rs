@@ -91,7 +91,7 @@ impl Procedure for KickoffTable {
             }
             Sum2D6::Six => {
                 // todo: Cheering fans implement. The rules for cheering fans are:
-                // Both coaches roll a D6 and add the number ofcheerleaders on their Team Draft list.
+                // Both coaches roll a D6 and add the number of cheerleaders on their Team Draft list.
                 // The coach with the highest total may immediately roll once on the Prayers to Nuffle table.
                 // In the case of a tie, neither coach rolls on the Prayers to Nuffle table.
                 // Note that if you roll a result that is currently in effect, you must re-roll it.
@@ -571,6 +571,19 @@ impl Procedure for BrilliantCoaching {
                 _ => panic!("Unexpected input {:?}", input),
             },
         }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Blitz {}
+impl Blitz {
+    fn new() -> AnyProc {
+AnyProc::Blitz(Blitz {})
+    }
+}
+impl Procedure for Blitz {
+    fn step(&mut self, game_state: &mut GameState, input: ProcInput) -> ProcState {
+        
     }
 }
 
@@ -1775,6 +1788,56 @@ mod tests {
             assert_eq!(state.home.temporary_rerolls, 0);
             assert_eq!(state.away.temporary_rerolls, 1);
         }
+    }
+
+    mod kickoff_blitz {
+        use super::*;
+
+        #[test]
+        fn can_deselect_and_replace_before_confirm() {
+            // Should test that during selection phase, it should be possible to change current selection until the 
+            // coach has selected the confirm selection action.
+        }
+
+        #[test]
+        fn can_confirm_with_zero_selected() {
+            // should test that during selection phase, it should be possible to select the confirm selection action without
+            // any players having been selected.
+        }
+        
+        #[test]
+        fn should_be_possible_to_select_less_than_rolled_nr_of_players() {
+            // should test that during selection phase, it should be possible to select less than the D3 + 3 players allowed
+            // and then confirm it.
+        }
+
+        #[test]
+        fn not_open_players_should_not_be_selectable() {
+            // should test that only open players on the field are selectable.
+        }
+
+        #[test]
+        fn foul_action_should_not_be_allowed() {
+            // should test that if a selected player does a blitz action and successfully knocks down an opposing player,
+            // another selected player should not be allowed to foul the knocked down player.
+        }
+
+        #[test]
+        fn player_falling_down_should_immediatley_end_turn() {
+            // should test that if a selected player falls down for any reason (for example fail gfi), the remaining selected
+            // players should not be allowed to make their moves and the blitz event should end.
+        }
+
+        #[test]
+        fn only_one_player_should_be_allowed_to_blitz() {
+            // should test that if a selected player has used a blitz action, the other selected players should not be allowed to. 
+        }
+
+        #[test]
+        fn ball_should_be_in_the_air_during_blitz() {
+            // should assert that the ball is still in the air and cannot be picked up during a blitz event.   
+        }
+
     }
 
     mod kickoff_officious_ref {
