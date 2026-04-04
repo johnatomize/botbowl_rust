@@ -4,7 +4,7 @@ use crate::core::model::Procedure;
 use crate::core::procedures::ball_procs::{
     Bounce, Catch, Deflect, DeflectOrResolve, Pass, PickupProc, ThrowIn, Touchback, Touchdown,
 };
-use crate::core::procedures::nuffle_prayers_procs::{PrayersToNuffle, TrapdoorCheck};
+use crate::core::procedures::nuffle_prayers_procs::{FirendsWithTheRef, PrayersToNuffle, TrapdoorCheck};
 use crate::core::procedures::{Blitz, BrilliantCoaching, OfficiousRef, PitchInvasion, QuickSnap};
 
 use crate::core::procedures::block_procs::{Block, BlockAction, FollowUp, KnockDown, Push};
@@ -30,7 +30,6 @@ pub enum AnyProc {
     BrilliantCoaching(BrilliantCoaching),
     Catch(SimpleProcContainer<Catch>),
     ChangingWeather(ChangingWeather),
-    SolidDefence(SolidDefence),
     ChooseKickReceive(ChooseKickReceive),
     CoinToss(CoinToss),
     Deflect(SimpleProcContainer<Deflect>),
@@ -38,6 +37,7 @@ pub enum AnyProc {
     DodgeProc(SimpleProcContainer<DodgeProc>),
     Ejection(Ejection),
     FollowUp(FollowUp),
+    FirendsWithTheRef(FirendsWithTheRef),
     GameOver(GameOver),
     GfiProc(SimpleProcContainer<GfiProc>),
     Half(Half),
@@ -57,6 +57,7 @@ pub enum AnyProc {
     Push(Push),
     QuickSnap(QuickSnap),
     Setup(Setup),
+    SolidDefence(SolidDefence),
     StandUp(StandUp),
     ThrowIn(ThrowIn),
     Touchback(Touchback),
@@ -90,6 +91,7 @@ impl std::fmt::Debug for AnyProc {
             Self::DodgeProc(arg0) => f.debug_tuple("DodgeProc").field(arg0).finish(),
             Self::Ejection(arg0) => f.debug_tuple("Ejection").field(arg0).finish(),
             Self::FollowUp(arg0) => f.debug_tuple("FollowUp").field(arg0).finish(),
+            Self::FirendsWithTheRef(arg0) => f.debug_tuple("FriendsWithTheRef").field(arg0).finish(),
             Self::GameOver(arg0) => f.debug_tuple("GameOver").field(arg0).finish(),
             Self::GfiProc(arg0) => f.debug_tuple("GfiProc").field(arg0).finish(),
             Self::Half(arg0) => f.debug_tuple("Half").field(arg0).finish(),
@@ -147,6 +149,7 @@ impl Procedure for AnyProc {
             AnyProc::DodgeProc(arg) => arg.step(game_state, input),
             AnyProc::Ejection(arg) => arg.step(game_state, input),
             AnyProc::FollowUp(arg) => arg.step(game_state, input),
+            AnyProc::FirendsWithTheRef(arg) => arg.step(game_state, input),
             AnyProc::GameOver(arg) => arg.step(game_state, input),
             AnyProc::GfiProc(arg) => arg.step(game_state, input),
             AnyProc::Half(arg) => arg.step(game_state, input),

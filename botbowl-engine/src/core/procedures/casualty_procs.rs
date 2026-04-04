@@ -143,7 +143,11 @@ impl Procedure for Ejection {
                 _ => panic!("Unexpected input"),
             },
             EjectionState::AwaitRoll => match input {
-                ProcInput::Roll(RollResult::D6(roll)) => match ArgueTheCall::from(roll) {
+                ProcInput::Roll(RollResult::D6(roll)) => match game_state
+                    .get_team_from_player(self.id)
+                    .unwrap()
+                    .argue_the_call_result(roll)
+                {
                     ArgueTheCall::YoureOutaHere => {
                         game_state
                             .get_mut_team_from_player(self.id)

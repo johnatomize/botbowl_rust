@@ -11,7 +11,7 @@ use super::dices::{D6Target, RequestedRoll, RollResult, Sum2D6Target, D6};
 use super::gamestate::GameState;
 use super::pathing::Node;
 use super::procedures::AnyProc;
-use super::table::{NumBlockDices, PlayerRole, PosAT, SimpleAT, Skill};
+use super::table::{ArgueTheCall, NumBlockDices, PlayerRole, PosAT, SimpleAT, Skill};
 use crate::core::table;
 
 pub type PlayerID = usize;
@@ -520,6 +520,7 @@ pub struct TeamState {
     reroll_used: bool,
     //time_violation: u8,
     ejected_coach: bool,
+    friends_with_the_ref: bool,
 }
 impl TeamState {
     #[allow(clippy::new_without_default)]
@@ -533,6 +534,7 @@ impl TeamState {
             ass_coaches: 0,
             temporary_rerolls: 0,
             fan_factor: 1,
+            friends_with_the_ref: false,
         }
         //TeamState { bribes: 0, score: 0, turn: 0, rerolls_start: 3, rerolls: 3, fanFactor: 3, reroll_used: false }
     }
@@ -560,6 +562,23 @@ impl TeamState {
     }
     pub(crate) fn clear_temporary_rerolls(&mut self) {
         self.temporary_rerolls = 0;
+    }
+    pub(crate) fn activate_friends_with_the_ref(&mut self) {
+        self.friends_with_the_ref = true;
+    }
+    pub(crate) fn clear_friends_with_the_ref(&mut self) {
+        self.friends_with_the_ref = false;
+    }
+    pub(crate) fn argue_the_call_result(&self, roll: D6) -> ArgueTheCall {
+        if !self.friends_with_the_ref {
+            return ArgueTheCall::from(roll);
+        }
+
+        match roll {
+            D6::One => ArgueTheCall::YoureOutaHere,
+            D6::Five | D6::Six => ArgueTheCall::WellWhenYouPutItLikeThat,
+            D6::Two | D6::Three | D6::Four => ArgueTheCall::IDontCare,
+        }
     }
     pub fn can_use_reroll(&self) -> bool {
         !self.reroll_used && (self.temporary_rerolls > 0 || self.rerolls > 0)
