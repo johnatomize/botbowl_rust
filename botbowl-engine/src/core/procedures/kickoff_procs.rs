@@ -1875,6 +1875,31 @@ mod tests {
         }
 
         #[test]
+        fn high_d16_roll_is_ignored_until_a_player_index_is_hit() {
+            let mut state: GameState = GameStateBuilder::new_at_kickoff();
+            let selected_home_id = state
+                .get_players_on_pitch_in_team(TeamType::Home)
+                .map(|player| player.id)
+                .next()
+                .unwrap();
+
+            fix_officious_ref_kickoff_rolls(&mut state);
+            state.fixes.fix_d6(1); // home coach total => 2
+            state.fixes.fix_d6(6); // away coach total => 7
+            state.fixes.fix_d16(16); // ignored because no team has 16 players on pitch
+            state.fixes.fix_d16(1); // home selected player
+            state.fixes.fix_d6(2); // selected player stays
+            state.fixes.fix_d8_direction(Direction::up()); // bounce
+
+            state.step_simple(SimpleAT::KickoffAimMiddle);
+
+            assert_eq!(
+                state.get_player_unsafe(selected_home_id).status,
+                PlayerStatus::Down
+            );
+        }
+
+        #[test]
         fn rolls_two_plus_should_place_prone_and_stun_selected_player() {
             let mut state: GameState = GameStateBuilder::new_at_kickoff();
             state.home.set_fan_factor(3);
