@@ -5,7 +5,7 @@ use crate::core::procedures::ball_procs::{
     Bounce, Catch, Deflect, DeflectOrResolve, Pass, PickupProc, ThrowIn, Touchback, Touchdown,
 };
 use crate::core::procedures::nuffle_prayers_procs::{PrayersToNuffle, TrapdoorCheck};
-use crate::core::procedures::{BrilliantCoaching, OfficiousRef, PitchInvasion, QuickSnap};
+use crate::core::procedures::{Blitz, BrilliantCoaching, OfficiousRef, PitchInvasion, QuickSnap};
 
 use crate::core::procedures::block_procs::{Block, BlockAction, FollowUp, KnockDown, Push};
 use crate::core::procedures::casualty_procs::{Armor, Ejection, Injury};
@@ -23,6 +23,7 @@ use crate::core::procedures::procedure_tools::SimpleProcContainer;
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum AnyProc {
     Armor(Armor),
+    Blitz(Blitz),
     Block(Block),
     BlockAction(BlockAction),
     Bounce(Bounce),
@@ -70,6 +71,7 @@ impl std::fmt::Debug for AnyProc {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Armor(arg0) => f.debug_tuple("Armor").field(arg0).finish(),
+            Self::Blitz(arg0) => f.debug_tuple("Blitz").field(arg0).finish(),
             Self::Block(arg0) => f.debug_tuple("Block").field(arg0).finish(),
             Self::BlockAction(arg0) => f.debug_tuple("BlockAction").field(arg0).finish(),
             Self::Bounce(arg0) => f.debug_tuple("Bounce").field(arg0).finish(),
@@ -130,6 +132,7 @@ impl Procedure for AnyProc {
     ) -> crate::core::model::ProcState {
         match self {
             AnyProc::Armor(arg) => arg.step(game_state, input),
+            AnyProc::Blitz(arg) => arg.step(game_state, input),
             AnyProc::Block(arg) => arg.step(game_state, input),
             AnyProc::BlockAction(arg) => arg.step(game_state, input),
             AnyProc::Bounce(arg) => arg.step(game_state, input),
