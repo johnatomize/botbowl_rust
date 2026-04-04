@@ -28,21 +28,79 @@ impl Procedure for PrayersToNuffle {
             D16::One => {
                 game_state.info.trapdoors_active = true;
             }
-            D16::Two => {}
-            D16::Three => {}
-            D16::Four => {}
-            D16::Five => {}
-            D16::Six => {}
-            D16::Seven => {}
-            D16::Eight => {}
-            D16::Nine => {}
-            D16::Ten => {}
-            D16::Eleven => {}
-            D16::Twelve => {}
-            D16::Thirteen => {}
-            D16::Fourteen => {}
-            D16::Fifteen => {}
-            D16::Sixteen => {}
+            D16::Two => {
+                // Todo: implement Friends with the ref. The rules for Friends with the Ref are:
+                // Until the end of this drive, you may treat a roll of 5 or 6 on the Argue the Call table as a
+                // WellWhenYouPutItLikeThat result and a roll of 2-4 as an “I Don’t Care!” result
+            }
+            D16::Three => {
+                //Todo: implement Stiletto. The rules for Stiletto are: 
+                // Randomly select one player on your team that is available to play during this drive and that does not have the Loner (X+) trait. 
+                // Until the end of this drive, that player gains the Stab trait.
+            }
+            D16::Four => {
+                // Todo: implement Iron Man. The rules for Iron Man are:
+                // Choose one player on your team that is available to play during this drive and that does not have the Loner (X+) trait. 
+                // Until the end of this game, that player improves their AV by 1, to a maximum of 11+.
+            }
+            D16::Five => {
+                // Todo: implement Knuckle Dusters. The rules for Knuckle Dusters are:
+                // Choose one player on your team that is available to play during this drive and that does not have the Loner (X+) trait. 
+                // Until the end of this drive, that player gains the Mighty Blow (+1) skill. 
+            }
+            D16::Six => {
+                // Todo: implement Bad Habits. The rules for Bad Habits are:
+                // Randomly select D3 opposition players that are available to play during this drive and that do not have the Loner (X+) trait. 
+                // Until the end of this drive, those players gain the Loner (2+) trait.
+            }
+            D16::Seven => {
+                // Todo: implement Greasy Cleats. The rules for Greasy Cleats are:
+                // Randomly select one opposition player that is available to play during this drive. 
+                // That player has had their boots tampered with! Until the end of this drive, their MA is reduced by 1.
+            }
+            D16::Eight => {
+                // Todo: implement Blessed Statue of Nuffle. The rules for Blessed Statue of Nuffle are:
+                // Choose one player on your team that is available to play during this drive and that does not have the Loner (X+) trait. 
+                // Until the end of this game, that player gains the Pro skill.
+            }
+            D16::Nine => {
+                // Todo: implement Moles under the Pitch. The rules for Moles under the Pitch are:
+                // Until the end of this half, apply a -1 modifier every time any player attempts to Rush
+                // an extra square (-2 should it occur that both coaches have rolled this result).
+            }
+            D16::Ten => {
+                // Todo: implement Perfect Passing. The rules for Perfect Passing are:
+                // Until the end of this game, any player on your team that makes a Completion earns 2 SPP, rather than the usual 1 SPP
+            }
+            D16::Eleven => {
+                // Todo: implement Fan Interaction. The rules for Fan Interaction are:
+                // Until the end of this drive, if a player on your team causes a Casualty by pushing an opponent into the crowd, 
+                // that player will earn 2 SPP exactly as if they had caused a Casualty by performing a Block action.
+            }
+            D16::Twelve => {
+                // Todo: implement Necessary Violence. The rules for Necessary Violence are:
+                // Until the end of this drive, any player on your team that causes a Casualty earns 3 SPP, rather than the usual 2 SPP.
+            }
+            D16::Thirteen => {
+                // Todo: implement Fouling Frenzy. The rules for Fouling Frenzy are:
+                // Until the end of this drive, any player on your team that causes a Casualty with a Foul action earns 2 SPP,
+                // exactly as if they had caused a Casualty by performing a Block action.
+            }
+            D16::Fourteen => {
+                // Todo: implement Throw a Rock. The rules for Throw a Rock are:
+                // Until the end of this drive, should an opposition player Stall, at the end of their team turn you may roll a D6. 
+                // On a roll of 5+, an angry fan throws a rock at that player. The player is immediately Knocked Down.
+            }
+            D16::Fifteen => {
+                // Todo: implement Under Scrutiny. The rules for Under Scrutiny are:
+                // Until the end of this half, any player on the opposing team that commits a Foul action is automatically seen by the referee, 
+                // even if a natural double is not rolled.
+            }
+            D16::Sixteen => {
+                // Todo: implement Intensive Training. The rules for Intensive Training are:
+                // Randomly select one player on your team that is available to play during this drive and that does not have the Loner (X+) trait. 
+                //Until the end of this game, that player gains a single Primary skill of your choice.
+            }
         }
         ProcState::from(procs)
     }
