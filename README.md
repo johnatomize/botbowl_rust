@@ -20,7 +20,6 @@ forward model in a botbowl competition:
 
 - kickoff table:
 	- cheering fans
-	- blitz!
 
 - (Pathfinding) with leaping over prone players
 
