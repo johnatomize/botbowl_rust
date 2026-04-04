@@ -3,15 +3,17 @@ use serde::{Deserialize, Serialize};
 use crate::core::{
     dices::{D6Target, RequestedRoll, RollResult, RollTarget, D16, D6},
     gamestate::GameState,
-    model::{BallState, PlayerID, ProcInput, ProcState, Procedure},
+    model::{BallState, PlayerID, ProcInput, ProcState, Procedure, TeamType},
     procedures::{ball_procs, casualty_procs, AnyProc},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PrayersToNuffle {}
+pub struct PrayersToNuffle {
+    team: TeamType,
+}
 impl PrayersToNuffle {
-    pub fn new() -> AnyProc {
-        AnyProc::PrayersToNuffle(PrayersToNuffle {})
+    pub fn new(team: TeamType) -> AnyProc {
+        AnyProc::PrayersToNuffle(PrayersToNuffle { team })
     }
 }
 impl Procedure for PrayersToNuffle {
@@ -23,15 +25,13 @@ impl Procedure for PrayersToNuffle {
             ProcInput::Roll(RollResult::D16(prayers_to_nuffle_roll)) => prayers_to_nuffle_roll,
             _ => panic!("Unexpected input {:?}", input),
         };
-        let procs: Vec<AnyProc> = Vec::new();
+        let mut procs: Vec<AnyProc> = Vec::new();
         match prayers_to_nuffles_roll {
             D16::One => {
                 game_state.info.trapdoors_active = true;
             }
             D16::Two => {
-                // Todo: implement Friends with the ref. The rules for Friends with the Ref are:
-                // Until the end of this drive, you may treat a roll of 5 or 6 on the Argue the Call table as a
-                // WellWhenYouPutItLikeThat result and a roll of 2-4 as an IDontCare result
+                procs.push(FirendsWithTheRef::new(self.team));
             }
             D16::Three => {
                 //Todo: implement Stiletto. The rules for Stiletto are: 
@@ -162,36 +162,198 @@ impl Procedure for TrapdoorCheck {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FirendsWithTheRef {}
+pub struct FirendsWithTheRef {
+    team: TeamType,
+}
 impl FirendsWithTheRef {
-    pub fn new() -> AnyProc { AnyProc::FirendsWithTheRef(FirendsWithTheRef {}) }
+    pub fn new(team: TeamType) -> AnyProc {
+        AnyProc::FirendsWithTheRef(FirendsWithTheRef { team })
+    }
 }
 impl Procedure for FirendsWithTheRef {
     fn step(&mut self, game_state: &mut GameState, input: ProcInput) -> ProcState {
-        
+        match input {
+            ProcInput::Nothing => {
+                match self.team {
+                    TeamType::Home => game_state.home.activate_friends_with_the_ref(),
+                    TeamType::Away => game_state.away.activate_friends_with_the_ref(),
+                }
+                ProcState::Done
+            }
+            _ => panic!("Unexpected input {:?}", input),
+        }
     }
 }
 
 
 #[cfg(test)]
 mod tests {
+    use crate::core::{
+        dices::{RequestedRoll, RollResult, D16, D6},
+        gamestate::{GameState, GameStateBuilder},
+        model::{Action, PlayerID, PlayerStats, Position, ProcInput, TeamType},
+        procedures::Ejection,
+        table::SimpleAT,
+    };
+
+    use super::*;
 
     mod friends_with_the_ref {
+        use super::*;
+
+        fn activate_friends_with_the_ref(state: &mut GameState, team: TeamType) {
+            let mut prayer = match PrayersToNuffle::new(team) {
+                AnyProc::PrayersToNuffle(proc) => proc,
+                _ => unreachable!(),
+            };
+
+            assert!(matches!(
+                prayer.step(state, ProcInput::Nothing),
+                ProcState::NeedRoll(RequestedRoll::D16)
+            ));
+
+            let ProcState::DoneNewProcs(mut procs) =
+                prayer.step(state, ProcInput::Roll(RollResult::D16(D16::Two)))
+            else {
+                panic!("Friends with the Ref should enqueue its activator proc");
+            };
+
+            assert_eq!(procs.len(), 1);
+            let AnyProc::FirendsWithTheRef(mut effect) = procs.pop().unwrap() else {
+                panic!("Expected Friends with the Ref activator proc");
+            };
+
+            assert!(matches!(effect.step(state, ProcInput::Nothing), ProcState::Done));
+        }
+
+        fn build_single_player_state(team: TeamType, position: Position) -> GameState {
+            let mut builder = GameStateBuilder::new();
+            match team {
+                TeamType::Home => {
+                    builder.add_home_player(position);
+                }
+                TeamType::Away => {
+                    builder.add_away_player(position);
+                }
+            }
+            builder.build()
+        }
+
+        fn new_foul_ejection(id: PlayerID) -> Ejection {
+            match Ejection::new_foul(id) {
+                AnyProc::Ejection(proc) => proc,
+                _ => unreachable!(),
+            }
+        }
+
+        fn resolve_foul_argue_the_call(state: &mut GameState, id: PlayerID, roll: D6) {
+            let mut ejection = new_foul_ejection(id);
+
+            let proc_state = ejection.step(state, ProcInput::Nothing);
+            assert!(matches!(
+                proc_state,
+                ProcState::NeedAction(aa)
+                    if aa.is_legal_action(Action::Simple(SimpleAT::ArgueTheCall))
+                        && aa.is_legal_action(Action::Simple(SimpleAT::DontArgueTheCall))
+            ));
+
+            assert!(matches!(
+                ejection.step(
+                    state,
+                    ProcInput::Action(Action::Simple(SimpleAT::ArgueTheCall)),
+                ),
+                ProcState::NeedRoll(RequestedRoll::D6)
+            ));
+
+            assert!(matches!(
+                ejection.step(state, ProcInput::Roll(RollResult::D6(roll))),
+                ProcState::Done
+            ));
+        }
+
         #[test]
         fn should_be_removed_at_the_end_of_the_drive() {
+            let start_pos = Position::new((2, 5));
+            let td_pos = Position::new((1, 5));
+            let mut state = GameStateBuilder::new()
+                .add_home_player(start_pos)
+                .add_ball_pos(start_pos)
+                .build();
 
+            activate_friends_with_the_ref(&mut state, TeamType::Home);
+
+            state.step_positional(crate::core::table::PosAT::StartMove, start_pos);
+            state.step_positional(crate::core::table::PosAT::Move, td_pos);
+
+            assert_eq!(state.home.score, 1);
+
+            let post_drive_pos = Position::new((5, 5));
+            let id = state
+                .add_new_player_to_field(PlayerStats::new_lineman(TeamType::Home), post_drive_pos)
+                .unwrap();
+
+            resolve_foul_argue_the_call(&mut state, id, D6::Five);
+
+            assert_eq!(state.get_player_id_at(post_drive_pos), None);
+            assert!(state.info.turnover);
+            assert!(state.home.can_argue_the_call());
+            assert!(state.get_dugout().any(|player| {
+                player.place == crate::core::model::DugoutPlace::Ejected
+                    && player.stats.team == TeamType::Home
+            }));
         }
 
         #[test]
         fn argue_the_call_should_be_correctly_modified_on_roll_of_five_or_six() {
-            //should test that rolling 5 or 6 is treated as WellWhenYouPutItLikeThat
+            let start_pos = Position::new((5, 5));
 
+            for roll in [D6::Five, D6::Six] {
+                let mut state = build_single_player_state(TeamType::Home, start_pos);
+                activate_friends_with_the_ref(&mut state, TeamType::Home);
+
+                let id = state.get_player_id_at(start_pos).unwrap();
+                resolve_foul_argue_the_call(&mut state, id, roll);
+
+                assert_eq!(state.get_player_id_at(start_pos), Some(id));
+                assert!(state.info.turnover);
+                assert!(state.home.can_argue_the_call());
+                assert!(state.get_dugout().next().is_none());
+            }
+
+            let mut control_state = build_single_player_state(TeamType::Away, start_pos);
+            activate_friends_with_the_ref(&mut control_state, TeamType::Home);
+
+            let away_id = control_state.get_player_id_at(start_pos).unwrap();
+            resolve_foul_argue_the_call(&mut control_state, away_id, D6::Five);
+
+            assert_eq!(control_state.get_player_id_at(start_pos), None);
+            assert!(control_state.info.turnover);
+            assert!(control_state.away.can_argue_the_call());
+            assert!(control_state.get_dugout().any(|player| {
+                player.place == crate::core::model::DugoutPlace::Ejected
+                    && player.stats.team == TeamType::Away
+            }));
         }
 
         #[test]
         fn argue_the_call_should_be_correctly_modified_on_roll_of_two_to_four() {
-            //should test that rolling 2 to 4 is treated as IDontCare
+            let start_pos = Position::new((5, 5));
 
+            for roll in [D6::Two, D6::Three, D6::Four] {
+                let mut state = build_single_player_state(TeamType::Home, start_pos);
+                activate_friends_with_the_ref(&mut state, TeamType::Home);
+
+                let id = state.get_player_id_at(start_pos).unwrap();
+                resolve_foul_argue_the_call(&mut state, id, roll);
+
+                assert_eq!(state.get_player_id_at(start_pos), None);
+                assert!(state.info.turnover);
+                assert!(state.home.can_argue_the_call());
+                assert!(state.get_dugout().any(|player| {
+                    player.place == crate::core::model::DugoutPlace::Ejected
+                        && player.stats.team == TeamType::Home
+                }));
+            }
         }
     }
 }
