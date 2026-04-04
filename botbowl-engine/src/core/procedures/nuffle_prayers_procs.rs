@@ -177,6 +177,21 @@ impl Procedure for FirendsWithTheRef {
 mod tests {
 
     mod friends_with_the_ref {
-        
+        #[test]
+        fn should_be_removed_at_the_end_of_the_drive() {
+
+        }
+
+        #[test]
+        fn argue_the_call_should_be_correctly_modified_on_roll_of_five_or_six() {
+            //should test that rolling 5 or 6 is treated as WellWhenYouPutItLikeThat
+
+        }
+
+        #[test]
+        fn argue_the_call_should_be_correctly_modified_on_roll_of_two_to_four() {
+            //should test that rolling 2 to 4 is treated as IDontCare
+
+        }
     }
 }
