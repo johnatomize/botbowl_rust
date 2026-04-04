@@ -40,6 +40,9 @@ impl Procedure for PrayersToNuffle {
             D16::Eleven => {}
             D16::Twelve => {}
             D16::Thirteen => {}
+            D16::Fourteen => {}
+            D16::Fifteen => {}
+            D16::Sixteen => {}
         }
         ProcState::from(procs)
     }
