@@ -198,6 +198,58 @@ impl Procedure for HighKick {
     }
 }
 
+fn selectable_open_player_positions(
+    game_state: &GameState,
+    team: TeamType,
+    selected_ids: &[PlayerID],
+    max_selected: usize,
+) -> Vec<Position> {
+    let allow_new_selection = selected_ids.len() < max_selected;
+    game_state
+        .get_open_player_ids_on_pitch(team)
+        .into_iter()
+        .filter(|id| selected_ids.contains(id) || allow_new_selection)
+        .map(|id| game_state.get_player_unsafe(id).position)
+        .collect()
+}
+
+fn selected_player_positions(game_state: &GameState, selected_ids: &[PlayerID]) -> Vec<Position> {
+    selected_ids
+        .iter()
+        .copied()
+        .map(|id| game_state.get_player_unsafe(id).position)
+        .collect()
+}
+
+fn build_select_position_actions(
+    team: TeamType,
+    positions: Vec<Position>,
+    include_end_setup: bool,
+) -> ProcState {
+    let mut aa = AvailableActions::new(team);
+    if include_end_setup {
+        aa.insert_simple(SimpleAT::EndSetup);
+    }
+    aa.insert_positional(PosAT::SelectPosition, positions);
+    ProcState::NeedAction(aa)
+}
+
+fn toggle_capped_selection(selected_ids: &mut Vec<PlayerID>, id: PlayerID, max_selected: usize) {
+    if let Some(index) = selected_ids.iter().position(|&pid| pid == id) {
+        selected_ids.swap_remove(index);
+    } else if selected_ids.len() < max_selected {
+        selected_ids.push(id);
+    }
+}
+
+fn require_open_player_id_at(game_state: &GameState, team: TeamType, pos: Position) -> PlayerID {
+    let id = game_state.get_player_id_at(pos).unwrap();
+    assert_eq!(game_state.get_player_unsafe(id).stats.team, team);
+    assert_eq!(game_state.get_player_unsafe(id).status, PlayerStatus::Up);
+    assert_eq!(game_state.get_tz_on(id), 0);
+    id
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 enum QuickSnapState {
     Init,
@@ -225,31 +277,24 @@ impl QuickSnap {
     }
 
     fn build_selection_actions(&self, game_state: &GameState) -> ProcState {
-        let allow_new_selection = self.selected_ids.len() < self.max_selected;
-        let positions = game_state
-            .get_open_player_ids_on_pitch(self.team)
-            .into_iter()
-            .filter(|id| self.selected_ids.contains(id) || allow_new_selection)
-            .map(|id| game_state.get_player_unsafe(id).position)
-            .collect();
-
-        let mut aa = AvailableActions::new(self.team);
-        aa.insert_simple(SimpleAT::EndSetup);
-        aa.insert_positional(PosAT::SelectPosition, positions);
-        ProcState::NeedAction(aa)
+        build_select_position_actions(
+            self.team,
+            selectable_open_player_positions(
+                game_state,
+                self.team,
+                &self.selected_ids,
+                self.max_selected,
+            ),
+            true,
+        )
     }
 
     fn build_player_selection_actions(&self, game_state: &GameState) -> ProcState {
-        let positions = self
-            .selected_ids
-            .iter()
-            .copied()
-            .map(|id| game_state.get_player_unsafe(id).position)
-            .collect();
-
-        let mut aa = AvailableActions::new(self.team);
-        aa.insert_positional(PosAT::SelectPosition, positions);
-        ProcState::NeedAction(aa)
+        build_select_position_actions(
+            self.team,
+            selected_player_positions(game_state, &self.selected_ids),
+            false,
+        )
     }
 
     fn build_move_target_actions(&self, game_state: &GameState, player_id: PlayerID) -> ProcState {
@@ -291,16 +336,8 @@ impl Procedure for QuickSnap {
                     }
                 }
                 ProcInput::Action(Action::Positional(PosAT::SelectPosition, pos)) => {
-                    let id = game_state.get_player_id_at(pos).unwrap();
-                    assert_eq!(game_state.get_player_unsafe(id).stats.team, self.team);
-                    assert_eq!(game_state.get_player_unsafe(id).status, PlayerStatus::Up);
-                    assert_eq!(game_state.get_tz_on(id), 0);
-
-                    if let Some(index) = self.selected_ids.iter().position(|&pid| pid == id) {
-                        self.selected_ids.swap_remove(index);
-                    } else if self.selected_ids.len() < self.max_selected {
-                        self.selected_ids.push(id);
-                    }
+                    let id = require_open_player_id_at(game_state, self.team, pos);
+                    toggle_capped_selection(&mut self.selected_ids, id, self.max_selected);
                     self.build_selection_actions(game_state)
                 }
                 _ => panic!("Unexpected input {:?}", input),
@@ -377,27 +414,17 @@ impl SolidDefence {
         })
     }
 
-    fn open_selectable_positions(&self, game_state: &GameState) -> Vec<Position> {
-        let allow_new_selection = self.selected_fielded_ids.len() < self.max_rearrange;
-        game_state
-            .get_open_player_ids_on_pitch(self.team)
-            .into_iter()
-            .filter(|id| {
-                self.selected_fielded_ids.contains(id)
-                    || (allow_new_selection && !self.selected_fielded_ids.contains(id))
-            })
-            .map(|id| game_state.get_player_unsafe(id).position)
-            .collect()
-    }
-
     fn build_selection_actions(&self, game_state: &GameState) -> ProcState {
-        let mut aa = AvailableActions::new(self.team);
-        aa.insert_simple(SimpleAT::EndSetup);
-        aa.insert_positional(
-            PosAT::SelectPosition,
-            self.open_selectable_positions(game_state),
-        );
-        ProcState::NeedAction(aa)
+        build_select_position_actions(
+            self.team,
+            selectable_open_player_positions(
+                game_state,
+                self.team,
+                &self.selected_fielded_ids,
+                self.max_rearrange,
+            ),
+            true,
+        )
     }
 
     fn start_rearrange_phase(&mut self, game_state: &mut GameState) {
@@ -457,16 +484,8 @@ impl Procedure for SolidDefence {
                     build_rearrange_actions(game_state, self.rearrange_cfg, &self.rearrange_state)
                 }
                 ProcInput::Action(Action::Positional(PosAT::SelectPosition, pos)) => {
-                    let id = game_state.get_player_id_at(pos).unwrap();
-                    assert_eq!(game_state.get_player_unsafe(id).stats.team, self.team);
-                    assert_eq!(game_state.get_player_unsafe(id).status, PlayerStatus::Up);
-                    assert_eq!(game_state.get_tz_on(id), 0);
-                    if let Some(index) = self.selected_fielded_ids.iter().position(|&pid| pid == id)
-                    {
-                        self.selected_fielded_ids.swap_remove(index);
-                    } else if self.selected_fielded_ids.len() < self.max_rearrange {
-                        self.selected_fielded_ids.push(id);
-                    }
+                    let id = require_open_player_id_at(game_state, self.team, pos);
+                    toggle_capped_selection(&mut self.selected_fielded_ids, id, self.max_rearrange);
                     self.build_selection_actions(game_state)
                 }
                 _ => panic!("Unexpected input {:?}", input),
@@ -596,18 +615,16 @@ impl Blitz {
     }
 
     fn build_selection_actions(&self, game_state: &GameState) -> ProcState {
-        let allow_new_selection = self.selected_ids.len() < self.max_selected;
-        let positions = game_state
-            .get_open_player_ids_on_pitch(self.team)
-            .into_iter()
-            .filter(|id| self.selected_ids.contains(id) || allow_new_selection)
-            .map(|id| game_state.get_player_unsafe(id).position)
-            .collect();
-
-        let mut aa = AvailableActions::new(self.team);
-        aa.insert_simple(SimpleAT::EndSetup);
-        aa.insert_positional(PosAT::SelectPosition, positions);
-        ProcState::NeedAction(aa)
+        build_select_position_actions(
+            self.team,
+            selectable_open_player_positions(
+                game_state,
+                self.team,
+                &self.selected_ids,
+                self.max_selected,
+            ),
+            true,
+        )
     }
 
     fn setup_activation_phase(&mut self, game_state: &mut GameState) {
@@ -697,16 +714,8 @@ impl Procedure for Blitz {
                     }
                 }
                 ProcInput::Action(Action::Positional(PosAT::SelectPosition, pos)) => {
-                    let id = game_state.get_player_id_at(pos).unwrap();
-                    assert_eq!(game_state.get_player_unsafe(id).stats.team, self.team);
-                    assert_eq!(game_state.get_player_unsafe(id).status, PlayerStatus::Up);
-                    assert_eq!(game_state.get_tz_on(id), 0);
-
-                    if let Some(index) = self.selected_ids.iter().position(|&pid| pid == id) {
-                        self.selected_ids.swap_remove(index);
-                    } else if self.selected_ids.len() < self.max_selected {
-                        self.selected_ids.push(id);
-                    }
+                    let id = require_open_player_id_at(game_state, self.team, pos);
+                    toggle_capped_selection(&mut self.selected_ids, id, self.max_selected);
                     self.build_selection_actions(game_state)
                 }
                 _ => panic!("Unexpected input {:?}", input),
