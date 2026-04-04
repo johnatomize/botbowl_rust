@@ -7,7 +7,7 @@ use crate::core::model::{
     other_team, Action, AvailableActions, BallState, Coord, Direction, DugoutPlace, PlayerID,
     PlayerStatus, Position, ProcState, Procedure, TeamType, Weather,
 };
-use crate::core::procedures::ball_procs;
+use crate::core::procedures::{ball_procs, movement_procs};
 use crate::core::table::*;
 
 use crate::core::gamestate::GameState;
@@ -107,10 +107,7 @@ impl Procedure for KickoffTable {
                 procs.push(QuickSnap::new());
             }
             Sum2D6::Ten => {
-                // todo: Blitz! implementation. The rules for Blitz! are:
-                // D3+3 Open players on the kicking team may immediately activate to perform a Move action.
-                // One may perform a Blitz action and one may perform a Throw Team-mate action.
-                // If a player Falls Over or is Knocked Down, no further players can be activated and the Blitz ends immediately
+                procs.push(Blitz::new());
             }
             Sum2D6::Eleven => {
                 procs.push(OfficiousRef::new());
@@ -575,15 +572,180 @@ impl Procedure for BrilliantCoaching {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct Blitz {}
+enum BlitzState {
+    Init,
+    SelectPlayers,
+    ActivatePlayers,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Blitz {
+    state: BlitzState,
+    team: TeamType,
+    max_selected: usize,
+    selected_ids: Vec<PlayerID>,
+}
 impl Blitz {
     fn new() -> AnyProc {
-AnyProc::Blitz(Blitz {})
+        AnyProc::Blitz(Blitz {
+            state: BlitzState::Init,
+            team: TeamType::Away,
+            max_selected: 0,
+            selected_ids: Vec::new(),
+        })
+    }
+
+    fn build_selection_actions(&self, game_state: &GameState) -> ProcState {
+        let allow_new_selection = self.selected_ids.len() < self.max_selected;
+        let positions = game_state
+            .get_open_player_ids_on_pitch(self.team)
+            .into_iter()
+            .filter(|id| self.selected_ids.contains(id) || allow_new_selection)
+            .map(|id| game_state.get_player_unsafe(id).position)
+            .collect();
+
+        let mut aa = AvailableActions::new(self.team);
+        aa.insert_simple(SimpleAT::EndSetup);
+        aa.insert_positional(PosAT::SelectPosition, positions);
+        ProcState::NeedAction(aa)
+    }
+
+    fn setup_activation_phase(&mut self, game_state: &mut GameState) {
+        game_state.info.team_turn = self.team;
+        game_state.info.turnover = false;
+        game_state.info.active_player = None;
+        game_state.info.player_action_type = None;
+        game_state.info.handoff_available = false;
+        game_state.info.pass_available = false;
+        game_state.info.foul_available = false;
+        game_state.info.blitz_available = true;
+        self.state = BlitzState::ActivatePlayers;
+    }
+
+    fn remaining_activation_positions(&self, game_state: &GameState) -> Vec<Position> {
+        self.selected_ids
+            .iter()
+            .copied()
+            .filter(|&id| {
+                game_state
+                    .get_player(id)
+                    .map(|player| !player.used)
+                    .unwrap_or(false)
+            })
+            .map(|id| game_state.get_player_unsafe(id).position)
+            .collect()
+    }
+
+    fn should_end_early(&self, game_state: &GameState) -> bool {
+        if game_state.info.turnover {
+            return true;
+        }
+
+        let Some(active_id) = game_state.info.active_player else {
+            return false;
+        };
+
+        match game_state.get_player(active_id) {
+            Ok(player) => player.status != PlayerStatus::Up,
+            Err(_) => true,
+        }
+    }
+
+    fn finish_blitz(&mut self, game_state: &mut GameState) -> ProcState {
+        game_state.info.turnover = false;
+        game_state.info.active_player = None;
+        game_state.info.player_action_type = None;
+        ProcState::Done
+    }
+
+    fn build_activation_actions(&self, game_state: &GameState) -> ProcState {
+        let positions = self.remaining_activation_positions(game_state);
+        if positions.is_empty() {
+            return ProcState::Done;
+        }
+
+        let mut aa = AvailableActions::new(self.team);
+        aa.insert_simple(SimpleAT::EndTurn);
+        aa.insert_positional(PosAT::StartMove, positions.clone());
+        if game_state.info.blitz_available {
+            aa.insert_positional(PosAT::StartBlitz, positions);
+        }
+        ProcState::NeedAction(aa)
     }
 }
 impl Procedure for Blitz {
     fn step(&mut self, game_state: &mut GameState, input: ProcInput) -> ProcState {
-        
+        match self.state {
+            BlitzState::Init => match input {
+                ProcInput::Nothing => ProcState::NeedRoll(RequestedRoll::D3),
+                ProcInput::Roll(RollResult::D3(roll)) => {
+                    self.team = game_state.info.kicking_this_drive;
+                    self.max_selected = roll + 3;
+                    self.selected_ids.clear();
+                    self.state = BlitzState::SelectPlayers;
+                    self.build_selection_actions(game_state)
+                }
+                _ => panic!("Unexpected input {:?}", input),
+            },
+            BlitzState::SelectPlayers => match input {
+                ProcInput::Action(Action::Simple(SimpleAT::EndSetup)) => {
+                    if self.selected_ids.is_empty() {
+                        ProcState::Done
+                    } else {
+                        self.setup_activation_phase(game_state);
+                        self.build_activation_actions(game_state)
+                    }
+                }
+                ProcInput::Action(Action::Positional(PosAT::SelectPosition, pos)) => {
+                    let id = game_state.get_player_id_at(pos).unwrap();
+                    assert_eq!(game_state.get_player_unsafe(id).stats.team, self.team);
+                    assert_eq!(game_state.get_player_unsafe(id).status, PlayerStatus::Up);
+                    assert_eq!(game_state.get_tz_on(id), 0);
+
+                    if let Some(index) = self.selected_ids.iter().position(|&pid| pid == id) {
+                        self.selected_ids.swap_remove(index);
+                    } else if self.selected_ids.len() < self.max_selected {
+                        self.selected_ids.push(id);
+                    }
+                    self.build_selection_actions(game_state)
+                }
+                _ => panic!("Unexpected input {:?}", input),
+            },
+            BlitzState::ActivatePlayers => {
+                if self.should_end_early(game_state) {
+                    return self.finish_blitz(game_state);
+                }
+
+                game_state.info.active_player = None;
+                game_state.info.player_action_type = None;
+
+                match input {
+                    ProcInput::Nothing => match self.build_activation_actions(game_state) {
+                        ProcState::Done => self.finish_blitz(game_state),
+                        other => other,
+                    },
+                    ProcInput::Action(Action::Simple(SimpleAT::EndTurn)) => {
+                        self.finish_blitz(game_state)
+                    }
+                    ProcInput::Action(Action::Positional(at @ PosAT::StartMove, pos))
+                    | ProcInput::Action(Action::Positional(at @ PosAT::StartBlitz, pos)) => {
+                        let id = game_state.get_player_id_at(pos).unwrap();
+                        assert!(self.selected_ids.contains(&id));
+                        assert!(!game_state.get_player_unsafe(id).used);
+
+                        game_state.set_active_player(id);
+                        game_state.info.player_action_type = Some(at);
+                        if at == PosAT::StartBlitz {
+                            assert!(game_state.info.blitz_available);
+                            game_state.info.blitz_available = false;
+                        }
+
+                        ProcState::NotDoneNew(movement_procs::MoveAction::new(id))
+                    }
+                    _ => panic!("Unexpected input {:?}", input),
+                }
+            }
+        }
     }
 }
 
@@ -626,20 +788,24 @@ impl Procedure for OfficiousRef {
                     match (*home_total).cmp(&away_total) {
                         std::cmp::Ordering::Less => {
                             pending.extend(
-                                game_state.get_random_player_ids_on_pitch_in_team(TeamType::Home, 1),
+                                game_state
+                                    .get_random_player_ids_on_pitch_in_team(TeamType::Home, 1),
                             );
                         }
                         std::cmp::Ordering::Greater => {
                             pending.extend(
-                                game_state.get_random_player_ids_on_pitch_in_team(TeamType::Away, 1),
+                                game_state
+                                    .get_random_player_ids_on_pitch_in_team(TeamType::Away, 1),
                             );
                         }
                         std::cmp::Ordering::Equal => {
                             pending.extend(
-                                game_state.get_random_player_ids_on_pitch_in_team(TeamType::Home, 1),
+                                game_state
+                                    .get_random_player_ids_on_pitch_in_team(TeamType::Home, 1),
                             );
                             pending.extend(
-                                game_state.get_random_player_ids_on_pitch_in_team(TeamType::Away, 1),
+                                game_state
+                                    .get_random_player_ids_on_pitch_in_team(TeamType::Away, 1),
                             );
                         }
                     }
@@ -683,7 +849,9 @@ impl Procedure for OfficiousRef {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 enum PitchInvasionState {
     Init,
-    AwaitAwayRoll { home_total: i8 },
+    AwaitAwayRoll {
+        home_total: i8,
+    },
     RollVictimCounts {
         pending_teams: Vec<TeamType>,
         selected_ids: Vec<PlayerID>,
@@ -758,6 +926,7 @@ impl Procedure for PitchInvasion {
 
 #[cfg(test)]
 mod tests {
+    use crate::core::dices::BlockDice;
     use crate::core::gamestate::{BuilderState, GameState, GameStateBuilder};
     use crate::core::model::*;
     use crate::core::table::*;
@@ -1793,51 +1962,304 @@ mod tests {
     mod kickoff_blitz {
         use super::*;
 
+        fn blitz_state(home_players: &[Position], away_players: &[Position]) -> GameState {
+            let mut state: GameState = GameStateBuilder::new()
+                .set_state(BuilderState::Kickoff { turn: 1 })
+                .build();
+            state.clear_all_players().unwrap();
+
+            for position in home_players {
+                state
+                    .add_new_player_to_field(PlayerStats::new_lineman(TeamType::Home), *position)
+                    .unwrap();
+            }
+            for position in away_players {
+                state
+                    .add_new_player_to_field(PlayerStats::new_lineman(TeamType::Away), *position)
+                    .unwrap();
+            }
+
+            state.fixes.fix_d8_direction(Direction::up()); // scatter direction
+            state.fixes.fix_d6(5); // scatter length
+            state.fixes.fix_d6(5);
+            state.fixes.fix_d6(5); // kickoff table: blitz
+            state
+        }
+
+        fn advance_blitz_to_selection(state: &mut GameState, d3_roll: u8) {
+            state.fixes.fix_d3(d3_roll);
+            state.step_simple(SimpleAT::KickoffAimMiddle);
+            assert_eq!(
+                state.available_actions.team,
+                Some(state.info.kicking_this_drive)
+            );
+        }
+
         #[test]
         fn can_deselect_and_replace_before_confirm() {
-            // Should test that during selection phase, it should be possible to change current selection until the 
-            // coach has selected the confirm selection action.
+            let mut state = blitz_state(
+                &[],
+                &[
+                    Position::new((18, 5)),
+                    Position::new((18, 7)),
+                    Position::new((18, 9)),
+                    Position::new((18, 11)),
+                    Position::new((20, 5)),
+                    Position::new((20, 7)),
+                ],
+            );
+            advance_blitz_to_selection(&mut state, 1); // D3+3 => 4
+
+            let selectable = state
+                .available_actions
+                .get_positions_for_action(PosAT::SelectPosition);
+            assert!(selectable.len() > 4);
+
+            let selected_for_cap: Vec<Position> = selectable.iter().copied().take(4).collect();
+            let replacement_pos = selectable[4];
+            for pos in &selected_for_cap {
+                state.step_positional(PosAT::SelectPosition, *pos);
+            }
+
+            assert!(
+                !state.is_legal_action(&Action::Positional(PosAT::SelectPosition, replacement_pos)),
+                "unselected open players should be blocked when at cap"
+            );
+
+            let deselected_pos = selected_for_cap[0];
+            state.step_positional(PosAT::SelectPosition, deselected_pos);
+            assert!(
+                state.is_legal_action(&Action::Positional(PosAT::SelectPosition, replacement_pos)),
+                "after deselecting, another player can be selected"
+            );
+
+            state.step_positional(PosAT::SelectPosition, replacement_pos);
+            assert!(
+                !state.is_legal_action(&Action::Positional(PosAT::SelectPosition, deselected_pos)),
+                "after replacement, deselected player should stay out of the capped selection"
+            );
+
+            state.step_simple(SimpleAT::EndSetup);
+            let move_stage_positions: HashSet<Position> = state
+                .available_actions
+                .get_positions_for_action(PosAT::StartMove)
+                .into_iter()
+                .collect();
+            assert_eq!(move_stage_positions.len(), 4);
+            assert!(move_stage_positions.contains(&replacement_pos));
+            assert!(!move_stage_positions.contains(&deselected_pos));
         }
 
         #[test]
         fn can_confirm_with_zero_selected() {
-            // should test that during selection phase, it should be possible to select the confirm selection action without
-            // any players having been selected.
+            let mut state = blitz_state(&[Position::new((10, 5)), Position::new((12, 5))], &[]);
+            let positions_before: HashSet<Position> = state
+                .get_players_on_pitch_in_team(TeamType::Home)
+                .map(|player| player.position)
+                .collect();
+
+            advance_blitz_to_selection(&mut state, 1);
+
+            assert!(state.is_legal_action(&Action::Simple(SimpleAT::EndSetup)));
+            state.fixes.fix_d8_direction(Direction::up()); // bounce after blitz resolves
+            state.step_simple(SimpleAT::EndSetup);
+
+            let positions_after: HashSet<Position> = state
+                .get_players_on_pitch_in_team(TeamType::Home)
+                .map(|player| player.position)
+                .collect();
+            assert_eq!(positions_after, positions_before);
+            assert_eq!(state.available_actions.team, Some(TeamType::Home));
         }
-        
+
         #[test]
         fn should_be_possible_to_select_less_than_rolled_nr_of_players() {
-            // should test that during selection phase, it should be possible to select less than the D3 + 3 players allowed
-            // and then confirm it.
+            let mut state = blitz_state(
+                &[],
+                &[
+                    Position::new((18, 5)),
+                    Position::new((18, 7)),
+                    Position::new((18, 9)),
+                    Position::new((18, 11)),
+                    Position::new((20, 5)),
+                ],
+            );
+            advance_blitz_to_selection(&mut state, 1); // D3+3 => 4
+
+            let selected: Vec<Position> = state
+                .available_actions
+                .get_positions_for_action(PosAT::SelectPosition)
+                .into_iter()
+                .take(2)
+                .collect();
+            assert_eq!(selected.len(), 2);
+
+            for pos in &selected {
+                state.step_positional(PosAT::SelectPosition, *pos);
+            }
+
+            assert!(state.is_legal_action(&Action::Simple(SimpleAT::EndSetup)));
+            state.step_simple(SimpleAT::EndSetup);
+
+            let move_stage_positions: HashSet<Position> = state
+                .available_actions
+                .get_positions_for_action(PosAT::StartMove)
+                .into_iter()
+                .collect();
+            assert_eq!(
+                move_stage_positions,
+                selected.into_iter().collect(),
+                "only the confirmed subset should enter the activation phase"
+            );
         }
 
         #[test]
         fn not_open_players_should_not_be_selectable() {
-            // should test that only open players on the field are selectable.
+            let marked_pos = Position::new((18, 10));
+            let down_pos = Position::new((20, 10));
+            let open_pos = Position::new((22, 10));
+            let mut state = blitz_state(
+                &[Position::new((17, 10))],
+                &[marked_pos, open_pos, down_pos],
+            );
+
+            let down_id = state.get_player_id_at(down_pos).unwrap();
+            state.get_mut_player_unsafe(down_id).status = PlayerStatus::Down;
+
+            advance_blitz_to_selection(&mut state, 1);
+
+            let selectable: HashSet<Position> = state
+                .available_actions
+                .get_positions_for_action(PosAT::SelectPosition)
+                .into_iter()
+                .collect();
+            let expected_open: HashSet<Position> = state
+                .get_open_player_ids_on_pitch(TeamType::Away)
+                .into_iter()
+                .map(|id| state.get_player_unsafe(id).position)
+                .collect();
+
+            assert_eq!(selectable, expected_open);
+            assert!(!selectable.contains(&marked_pos));
+            assert!(!selectable.contains(&down_pos));
+            assert!(selectable.contains(&open_pos));
         }
 
         #[test]
         fn foul_action_should_not_be_allowed() {
-            // should test that if a selected player does a blitz action and successfully knocks down an opposing player,
-            // another selected player should not be allowed to foul the knocked down player.
+            let first_blitzer = Position::new((19, 8));
+            let second_selected = Position::new((14, 8));
+            let victim_pos = Position::new((17, 8));
+            let pushed_pos = Position::new((16, 8));
+            let mut state = blitz_state(&[victim_pos], &[first_blitzer, second_selected]);
+            advance_blitz_to_selection(&mut state, 1);
+
+            state.step_positional(PosAT::SelectPosition, first_blitzer);
+            state.step_positional(PosAT::SelectPosition, second_selected);
+            state.step_simple(SimpleAT::EndSetup);
+
+            state.step_positional(PosAT::StartBlitz, first_blitzer);
+            state.fixes.fix_blockdice(BlockDice::Pow);
+            state.step_positional(PosAT::Block, victim_pos);
+            state.step_simple(SimpleAT::SelectPow);
+            state.step_positional(PosAT::Push, pushed_pos);
+            state.fixes.fix_d6(1); // armor
+            state.fixes.fix_d6(1); // armor
+            state.step_positional(PosAT::FollowUp, victim_pos);
+            state.step_simple(SimpleAT::EndPlayerTurn);
+
+            assert_eq!(
+                state
+                    .get_player_unsafe(state.get_player_id_at(pushed_pos).unwrap())
+                    .status,
+                PlayerStatus::Down
+            );
+            assert!(
+                !state.is_legal_action(&Action::Positional(PosAT::StartFoul, second_selected)),
+                "blitz kickoff should not expose foul actions for the remaining selected players"
+            );
+            assert!(state.is_legal_action(&Action::Positional(PosAT::StartMove, second_selected)));
         }
 
         #[test]
         fn player_falling_down_should_immediatley_end_turn() {
-            // should test that if a selected player falls down for any reason (for example fail gfi), the remaining selected
-            // players should not be allowed to make their moves and the blitz event should end.
+            let first_selected = Position::new((18, 1));
+            let second_selected = Position::new((18, 3));
+            let mut state = blitz_state(&[], &[first_selected, second_selected]);
+            let first_selected_id = state.get_player_id_at(first_selected).unwrap();
+            state.away.rerolls = 0;
+            state.home.rerolls = 0;
+            advance_blitz_to_selection(&mut state, 1);
+
+            state.step_positional(PosAT::SelectPosition, first_selected);
+            state.step_positional(PosAT::SelectPosition, second_selected);
+            state.step_simple(SimpleAT::EndSetup);
+
+            state.step_positional(PosAT::StartMove, first_selected);
+            state.fixes.fix_d6(1); // fail first GFI
+            state.fixes.fix_d6(1); // armor
+            state.fixes.fix_d6(1); // armor
+            state.fixes.fix_d8_direction(Direction::up()); // bounce after blitz ends
+            state.step_positional(PosAT::Move, Position::new((11, 1)));
+
+            assert_eq!(
+                state.get_player_unsafe(first_selected_id).status,
+                PlayerStatus::Down
+            );
+            assert_eq!(state.available_actions.team, Some(TeamType::Home));
+            assert!(
+                !state.is_legal_action(&Action::Positional(PosAT::StartMove, second_selected)),
+                "after a selected player falls, the blitz should end immediately"
+            );
         }
 
         #[test]
         fn only_one_player_should_be_allowed_to_blitz() {
-            // should test that if a selected player has used a blitz action, the other selected players should not be allowed to. 
+            let first_selected = Position::new((18, 5));
+            let second_selected = Position::new((18, 7));
+            let mut state = blitz_state(&[], &[first_selected, second_selected]);
+            advance_blitz_to_selection(&mut state, 1);
+
+            state.step_positional(PosAT::SelectPosition, first_selected);
+            state.step_positional(PosAT::SelectPosition, second_selected);
+            state.step_simple(SimpleAT::EndSetup);
+
+            state.step_positional(PosAT::StartBlitz, first_selected);
+            state.step_simple(SimpleAT::EndPlayerTurn);
+
+            assert!(
+                !state.is_legal_action(&Action::Positional(PosAT::StartBlitz, second_selected)),
+                "only one selected player should be able to take a blitz action"
+            );
+            assert!(state.is_legal_action(&Action::Positional(PosAT::StartMove, second_selected)));
         }
 
         #[test]
         fn ball_should_be_in_the_air_during_blitz() {
-            // should assert that the ball is still in the air and cannot be picked up during a blitz event.   
-        }
+            let carrier_candidate = Position::new((20, 2));
+            let mut state = blitz_state(&[], &[carrier_candidate, Position::new((18, 5))]);
+            let carrier_candidate_id = state.get_player_id_at(carrier_candidate).unwrap();
+            advance_blitz_to_selection(&mut state, 1);
 
+            let ball_pos = state.get_ball_position().unwrap();
+            assert_eq!(ball_pos, Position::new((21, 2)));
+            assert!(matches!(state.ball, BallState::InAir(pos) if pos == ball_pos));
+
+            state.step_positional(PosAT::SelectPosition, carrier_candidate);
+            state.step_simple(SimpleAT::EndSetup);
+
+            state.step_positional(PosAT::StartMove, carrier_candidate);
+            assert!(state.is_legal_action(&Action::Positional(PosAT::Move, ball_pos)));
+            state.step_positional(PosAT::Move, ball_pos);
+
+            let carrier_id = state.get_player_id_at(ball_pos).unwrap();
+            assert_eq!(carrier_id, carrier_candidate_id);
+            assert!(matches!(state.ball, BallState::InAir(pos) if pos == ball_pos));
+            assert!(
+                !matches!(state.ball, BallState::Carried(id) if id == carrier_id),
+                "moving onto the landing square should not pick up a ball that is still in the air"
+            );
+        }
     }
 
     mod kickoff_officious_ref {
