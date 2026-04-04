@@ -65,6 +65,9 @@ pub enum Skill {
     Catch,
     SureHands,
     SureFeet,
+    Loner4,
+    Loner3,
+    Stab,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]

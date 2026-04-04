@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use serde::{Deserialize, Serialize};
 
 use crate::core::{
@@ -35,8 +37,8 @@ impl Procedure for PrayersToNuffle {
             }
             D16::Three => {
                 //Todo: implement Stiletto. The rules for Stiletto are: 
-                // Randomly select one player on your team that is available to play during this drive and that does not have the Loner (X+) trait. 
-                // Until the end of this drive, that player gains the Stab trait.
+                // Randomly select one player on your team that is available to play during this drive and that does not have the LonerX skill. 
+                // Until the end of this drive, that player gains the Stab skill.
             }
             D16::Four => {
                 // Todo: implement Iron Man. The rules for Iron Man are:
@@ -185,6 +187,20 @@ impl Procedure for FirendsWithTheRef {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Stiletto {
+    team: TeamType,
+}
+impl Stiletto { 
+    fn new(team: TeamType) -> AnyProc {
+        AnyProc::Stiletto(Stiletto {team})
+    }
+}
+impl Procedure for Stiletto {
+    fn step(&mut self, game_state: &mut GameState, input: ProcInput) -> ProcState {
+        
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -355,5 +371,10 @@ mod tests {
                 }));
             }
         }
+    }
+
+    mod stiletto {
+        #[test]
+        fn 
     }
 }
