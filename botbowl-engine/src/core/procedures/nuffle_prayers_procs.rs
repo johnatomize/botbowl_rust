@@ -514,4 +514,29 @@ mod tests {
                 .all(|player| !player.stats.has_temporary_skill(TemporarySkill::Stab)));
         }
     }
+
+    mod iron_man {
+        use super::*;
+
+        #[test]
+        fn only_players_on_the_pitch_available_for_selection() {
+
+        }
+
+        #[test]
+        fn players_with_loner_skill_not_selectable() {
+
+        }
+
+        #[test]
+        fn armor_value_is_lost_at_end_of_drive() {
+
+        }
+
+        #[test]
+        fn player_with_armor_value_11_is_not_elegible() {
+            // should test that if a player already has armor value of 11, then they should not be elegible for selection.
+        }
+
+    }
 }
