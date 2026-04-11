@@ -4,7 +4,7 @@ use crate::core::model::Procedure;
 use crate::core::procedures::ball_procs::{
     Bounce, Catch, Deflect, DeflectOrResolve, Pass, PickupProc, ThrowIn, Touchback, Touchdown,
 };
-use crate::core::procedures::nuffle_prayers_procs::{FirendsWithTheRef, PrayersToNuffle, Stiletto, TrapdoorCheck};
+use crate::core::procedures::nuffle_prayers_procs::{FirendsWithTheRef, IronMan, PrayersToNuffle, Stiletto, TrapdoorCheck};
 use crate::core::procedures::{Blitz, BrilliantCoaching, OfficiousRef, PitchInvasion, QuickSnap};
 
 use crate::core::procedures::block_procs::{Block, BlockAction, FollowUp, KnockDown, Push};
@@ -43,6 +43,7 @@ pub enum AnyProc {
     Half(Half),
     HighKick(HighKick),
     Injury(Injury),
+    IronMan(IronMan),
     KOWakeUp(KOWakeUp),
     Kickoff(Kickoff),
     KickoffTable(KickoffTable),
@@ -98,6 +99,7 @@ impl std::fmt::Debug for AnyProc {
             Self::Half(arg0) => f.debug_tuple("Half").field(arg0).finish(),
             Self::HighKick(arg0) => f.debug_tuple("HighKick").field(arg0).finish(),
             Self::Injury(arg0) => f.debug_tuple("Injury").field(arg0).finish(),
+            Self::IronMan(arg0) => f.debug_tuple("IronMan").field(arg0).finish(),
             Self::KOWakeUp(arg0) => f.debug_tuple("KOWakeUp").field(arg0).finish(),
             Self::Kickoff(arg0) => f.debug_tuple("Kickoff").field(arg0).finish(),
             Self::KickoffTable(arg0) => f.debug_tuple("KickoffTable").field(arg0).finish(),
@@ -157,6 +159,7 @@ impl Procedure for AnyProc {
             AnyProc::Half(arg) => arg.step(game_state, input),
             AnyProc::HighKick(arg) => arg.step(game_state, input),
             AnyProc::Injury(arg) => arg.step(game_state, input),
+            AnyProc::IronMan(arg) => arg.step(game_state, input),
             AnyProc::KOWakeUp(arg) => arg.step(game_state, input),
             AnyProc::Kickoff(arg) => arg.step(game_state, input),
             AnyProc::KickoffTable(arg) => arg.step(game_state, input),

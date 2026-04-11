@@ -229,6 +229,22 @@ impl Procedure for Stiletto {
     }
 }
 
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IronMan {
+    team: TeamType
+}
+impl IronMan {
+    fn new(team: TeamType) -> AnyProc {
+        AnyProc::IronMan(IronMan {team})
+    }
+}
+impl Procedure for IronMan {
+    fn step(&mut self, game_state: &mut GameState, input: ProcInput) -> ProcState {
+        
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::core::{
