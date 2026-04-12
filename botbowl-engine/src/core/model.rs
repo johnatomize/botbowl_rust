@@ -343,6 +343,7 @@ pub struct PlayerStats {
     pub ag: u8,
     pass: D6Target,
     pub av: u8,
+    temp_av: u8,
     pub team: TeamType,
     skills: HashSet<Skill>,
     temporary_skills: HashSet<TemporarySkill>,
@@ -358,6 +359,7 @@ impl PlayerStats {
             ma: 6,
             ag: 3,
             av: 8,
+            temp_av: 0,
             team,
             skills: HashSet::new(),
             temporary_skills: HashSet::new(),
@@ -371,6 +373,7 @@ impl PlayerStats {
             ma: 7,
             ag: 3,
             av: 9,
+            temp_av: 0,
             team,
             skills: HashSet::from_iter([Skill::Block]),
             temporary_skills: HashSet::new(),
@@ -384,6 +387,7 @@ impl PlayerStats {
             ma: 8,
             ag: 3,
             av: 8,
+            temp_av: 0,
             team,
             skills: HashSet::from_iter([Skill::Dodge, Skill::Catch]),
             temporary_skills: HashSet::new(),
@@ -397,6 +401,7 @@ impl PlayerStats {
             ma: 6,
             ag: 3,
             av: 8,
+            temp_av: 0,
             team,
             skills: HashSet::from_iter([Skill::SureHands, Skill::Throw]),
             temporary_skills: HashSet::new(),
@@ -415,6 +420,15 @@ impl PlayerStats {
     }
     pub fn remove_temporary_skill(&mut self, skill: TemporarySkill) {
         self.temporary_skills.remove(&skill);
+    }
+    pub fn av(&self) -> u8 {
+        std::cmp::min(self.av + self.temp_av, 11)
+    }
+    pub fn add_temporary_av(&mut self, amount: u8) {
+        self.temp_av = 11u8.saturating_sub(self.av).min(self.temp_av.saturating_add(amount));
+    }
+    pub fn clear_temporary_av(&mut self) {
+        self.temp_av = 0;
     }
 }
 
@@ -446,7 +460,7 @@ pub struct FieldedPlayer {
 }
 impl FieldedPlayer {
     pub fn armor_target(&self) -> Sum2D6Target {
-        Sum2D6Target::try_from(self.stats.av + 1).unwrap()
+        Sum2D6Target::try_from(self.stats.av() + 1).unwrap()
     }
 
     pub fn ag_target(&self) -> D6Target {
