@@ -41,9 +41,7 @@ impl Procedure for PrayersToNuffle {
                 procs.push(IronMan::new(self.team));
             }
             D16::Five => {
-                // Todo: implement Knuckle Dusters. The rules for Knuckle Dusters are:
-                // Choose one player on your team that is available to play during this drive and that does not have the Loner (X+) trait. 
-                // Until the end of this drive, that player gains the Mighty Blow (+1) skill. 
+                procs.push(KnuckleDusters::new(self.team));
             }
             D16::Six => {
                 // Todo: implement Bad Habits. The rules for Bad Habits are:
@@ -280,6 +278,52 @@ impl Procedure for IronMan {
                     .expect("eligible player must still be on the pitch")
                     .stats
                     .add_temporary_av(1);
+                ProcState::Done
+            }
+            _ => panic!("Unexpected input {:?}", input),
+        }
+    }
+}
+
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KnuckleDusters {
+    team: TeamType
+}
+impl KnuckleDusters {
+    fn new(team: TeamType) -> AnyProc {
+        AnyProc::KnuckleDusters(KnuckleDusters {team})
+    }
+
+    fn eligible_players(&self, game_state: &GameState) -> Vec<PlayerID> {
+        game_state
+            .get_players_on_pitch_in_team(self.team)
+            .filter(|player| !player.has_skill(Skill::Loner3) && !player.has_skill(Skill::Loner4))
+            .map(|player| player.id)
+            .collect()
+    }
+}
+impl Procedure for KnuckleDusters {
+    fn step(&mut self, game_state: &mut GameState, input: ProcInput) -> ProcState {
+        let eligible_players = self.eligible_players(game_state);
+
+        if eligible_players.is_empty() {
+            return ProcState::Done;
+        }
+
+        match input {
+            ProcInput::Nothing => ProcState::NeedRoll(RequestedRoll::D16),
+            ProcInput::Roll(RollResult::D16(roll)) => {
+                let index = roll as usize - 1;
+                let Some(id) = eligible_players.get(index).copied() else {
+                    return ProcState::NeedRoll(RequestedRoll::D16);
+                };
+
+                game_state
+                    .get_mut_player(id)
+                    .expect("eligible player must still be on the pitch")
+                    .stats
+                    .give_temporary_skill(TemporarySkill::MightyBlow1);
                 ProcState::Done
             }
             _ => panic!("Unexpected input {:?}", input),
@@ -758,6 +802,119 @@ mod tests {
                 ProcState::Done
             ));
         }
+    }
 
+    mod knuckle_dusters {
+        use crate::core::{model::DugoutPlace, table::{Skill, TemporarySkill}};
+
+        use super::*;
+
+        fn activate_knuckle_dusters(state: &mut GameState, team: TeamType, selection_roll: D16) {
+            let mut prayer = match PrayersToNuffle::new(team) {
+                AnyProc::PrayersToNuffle(proc) => proc,
+                _ => unreachable!(),
+            };
+
+            assert!(matches!(
+                prayer.step(state, ProcInput::Nothing),
+                ProcState::NeedRoll(RequestedRoll::D16)
+            ));
+
+            let ProcState::DoneNewProcs(mut procs) =
+                prayer.step(state, ProcInput::Roll(RollResult::D16(D16::Five)))
+            else {
+                panic!("Knuckle Dusters should enqueue its activator proc");
+            };
+
+            assert_eq!(procs.len(), 1);
+            let AnyProc::KnuckleDusters(mut effect) = procs.pop().unwrap() else {
+                panic!("Expected Knuckle Dusters activator proc");
+            };
+
+            assert!(matches!(
+                effect.step(state, ProcInput::Nothing),
+                ProcState::NeedRoll(RequestedRoll::D16)
+            ));
+            assert!(matches!(
+                effect.step(state, ProcInput::Roll(RollResult::D16(selection_roll))),
+                ProcState::Done
+            ));
+        }
+
+        #[test]
+        fn only_players_on_the_pitch_available_for_selection() {
+            let start_pos = Position::new((5, 5));
+            let mut state = GameStateBuilder::empty_state();
+
+            let on_pitch_id = state
+                .add_new_player_to_field(PlayerStats::new_lineman(TeamType::Home), start_pos)
+                .unwrap();
+            state.dugout_add_new_player(
+                PlayerStats::new_lineman(TeamType::Home),
+                DugoutPlace::Reserves,
+            );
+
+            activate_knuckle_dusters(&mut state, TeamType::Home, D16::One);
+
+            assert!(state
+                .get_player(on_pitch_id)
+                .unwrap()
+                .has_temporary_skill(TemporarySkill::MightyBlow1));
+            assert!(state
+                .get_dugout()
+                .filter(|player| player.stats.team == TeamType::Home)
+                .all(|player| !player.stats.has_temporary_skill(TemporarySkill::MightyBlow1)));
+        }
+
+        #[test]
+        fn players_with_loner_skill_not_selectable() {
+            let loner_pos = Position::new((5, 5));
+            let normal_pos = Position::new((6, 5));
+            let mut state = GameStateBuilder::empty_state();
+
+            let mut loner_stats = PlayerStats::new_lineman(TeamType::Home);
+            loner_stats.give_skill(Skill::Loner3);
+            let loner_id = state.add_new_player_to_field(loner_stats, loner_pos).unwrap();
+            let normal_id = state
+                .add_new_player_to_field(PlayerStats::new_lineman(TeamType::Home), normal_pos)
+                .unwrap();
+
+            activate_knuckle_dusters(&mut state, TeamType::Home, D16::One);
+
+            assert!(!state
+                .get_player(loner_id)
+                .unwrap()
+                .has_temporary_skill(TemporarySkill::MightyBlow1));
+            assert!(state
+                .get_player(normal_id)
+                .unwrap()
+                .has_temporary_skill(TemporarySkill::MightyBlow1));
+        }
+
+        #[test]
+        fn skill_is_lost_at_end_of_drive() {
+            let start_pos = Position::new((2, 5));
+            let td_pos = Position::new((1, 5));
+            let mut state = GameStateBuilder::new()
+                .add_home_player(start_pos)
+                .add_ball_pos(start_pos)
+                .build();
+
+            let id = state.get_player_id_at(start_pos).unwrap();
+            activate_knuckle_dusters(&mut state, TeamType::Home, D16::One);
+            assert!(state
+                .get_player(id)
+                .unwrap()
+                .has_temporary_skill(TemporarySkill::MightyBlow1));
+
+            state.step_positional(crate::core::table::PosAT::StartMove, start_pos);
+            state.step_positional(crate::core::table::PosAT::Move, td_pos);
+
+            assert_eq!(state.home.score, 1);
+            assert!(state
+                .get_dugout()
+                .filter(|player| player.stats.team == TeamType::Home)
+                .all(|player| !player.stats.has_temporary_skill(TemporarySkill::MightyBlow1)));
+        }
     }
 }
