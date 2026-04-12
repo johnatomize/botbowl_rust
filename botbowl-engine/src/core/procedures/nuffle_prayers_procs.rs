@@ -35,12 +35,14 @@ impl Procedure for PrayersToNuffle {
                 procs.push(FirendsWithTheRef::new(self.team));
             }
             D16::Three => {
+                // todo: Check in rules if selection should be random or player chosen
                 procs.push(Stiletto::new(self.team));
             }
             D16::Four => {
                 procs.push(IronMan::new(self.team));
             }
             D16::Five => {
+                //TODO: Check in rules if selection should be random or player chosen
                 procs.push(KnuckleDusters::new(self.team));
             }
             D16::Six => {
