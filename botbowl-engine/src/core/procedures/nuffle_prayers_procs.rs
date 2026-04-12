@@ -287,6 +287,22 @@ impl Procedure for IronMan {
     }
 }
 
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KnuckleDusters {
+    team: TeamType
+}
+impl KnuckleDusters {
+    fn new(team: TeamType) -> AnyProc {
+        AnyProc::KnuckleDusters(KnuckleDusters {team})
+    }
+}
+impl Procedure for KnuckleDusters {
+    fn step(&mut self, game_state: &mut GameState, input: ProcInput) -> ProcState {
+        
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::core::{

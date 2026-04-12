@@ -4,7 +4,7 @@ use crate::core::model::Procedure;
 use crate::core::procedures::ball_procs::{
     Bounce, Catch, Deflect, DeflectOrResolve, Pass, PickupProc, ThrowIn, Touchback, Touchdown,
 };
-use crate::core::procedures::nuffle_prayers_procs::{FirendsWithTheRef, IronMan, PrayersToNuffle, Stiletto, TrapdoorCheck};
+use crate::core::procedures::nuffle_prayers_procs::{FirendsWithTheRef, IronMan, KnuckleDusters, PrayersToNuffle, Stiletto, TrapdoorCheck};
 use crate::core::procedures::{Blitz, BrilliantCoaching, OfficiousRef, PitchInvasion, QuickSnap};
 
 use crate::core::procedures::block_procs::{Block, BlockAction, FollowUp, KnockDown, Push};
@@ -48,6 +48,7 @@ pub enum AnyProc {
     Kickoff(Kickoff),
     KickoffTable(KickoffTable),
     KnockDown(KnockDown),
+    KnuckleDusters(KnuckleDusters),
     LandKickoff(LandKickoff),
     MoveAction(MoveAction),
     OfficiousRef(OfficiousRef),
@@ -104,6 +105,7 @@ impl std::fmt::Debug for AnyProc {
             Self::Kickoff(arg0) => f.debug_tuple("Kickoff").field(arg0).finish(),
             Self::KickoffTable(arg0) => f.debug_tuple("KickoffTable").field(arg0).finish(),
             Self::KnockDown(arg0) => f.debug_tuple("KnockDown").field(arg0).finish(),
+            Self::KnuckleDusters(arg0) => f.debug_tuple("KnuckleDusters").field(arg0).finish(),
             Self::LandKickoff(arg0) => f.debug_tuple("LandKickoff").field(arg0).finish(),
             Self::MoveAction(arg0) => f.debug_tuple("MoveAction").field(arg0).finish(),
             Self::OfficiousRef(arg0) => f.debug_tuple("OfficiousRef").field(arg0).finish(),
@@ -164,6 +166,7 @@ impl Procedure for AnyProc {
             AnyProc::Kickoff(arg) => arg.step(game_state, input),
             AnyProc::KickoffTable(arg) => arg.step(game_state, input),
             AnyProc::KnockDown(arg) => arg.step(game_state, input),
+            AnyProc::KnuckleDusters(arg) => arg.step(game_state, input),
             AnyProc::LandKickoff(arg) => arg.step(game_state, input),
             AnyProc::MoveAction(arg) => arg.step(game_state, input),
             AnyProc::OfficiousRef(arg) => arg.step(game_state, input),
