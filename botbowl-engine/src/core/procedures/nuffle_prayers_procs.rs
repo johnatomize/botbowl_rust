@@ -774,6 +774,24 @@ mod tests {
                 ProcState::Done
             ));
         }
+    }
 
+    mod KnuckleDusters {
+        use super::*;
+
+        #[test]
+        fn only_players_on_the_pitch_available_for_selection() {
+
+        }
+
+        #[test]
+        fn players_with_loner_skill_not_selectable() {
+
+        }
+
+        #[test]
+        fn skill_is_lost_at_end_of_drive() {
+
+        }
     }
 }
