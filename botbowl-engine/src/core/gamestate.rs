@@ -885,6 +885,16 @@ impl GameState {
             .flatten()
             .for_each(|player| player.stats.remove_temporary_skill(temporary_skill));
     }
+    pub fn clear_temporary_av_from_all_players(&mut self) {
+        self.fielded_players
+            .iter_mut()
+            .flatten()
+            .for_each(|player| player.stats.clear_temporary_av());
+        self.dugout_players
+            .iter_mut()
+            .flatten()
+            .for_each(|player| player.stats.clear_temporary_av());
+    }
     pub fn add_new_player_to_field(
         &mut self,
         player_stats: PlayerStats,
