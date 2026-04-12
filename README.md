@@ -32,7 +32,7 @@ forward model in a botbowl competition:
 ### Other things (in order of priority)
 
 - Prayers to Nuffle:
-	- so far only trapdoor implemented
+	- so far trapdoor, Stiletto, IronMan and KnuckleDusters implemented
 
 - Watch a recording in terminal
 - MCTS example bot (includes a gamestate hash)
