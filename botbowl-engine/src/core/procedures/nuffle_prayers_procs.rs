@@ -287,7 +287,6 @@ impl Procedure for IronMan {
     }
 }
 
-
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KnuckleDusters {
     team: TeamType
@@ -331,6 +330,17 @@ impl Procedure for KnuckleDusters {
             _ => panic!("Unexpected input {:?}", input),
         }
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BadHabit {
+
+}
+impl BadHabit {
+
+}
+impl Procedure for BadHabit {
+
 }
 
 #[cfg(test)]
@@ -917,6 +927,25 @@ mod tests {
                 .get_dugout()
                 .filter(|player| player.stats.team == TeamType::Home)
                 .all(|player| !player.stats.has_temporary_skill(TemporarySkill::MightyBlow1)));
+        }
+    }
+
+    mod bad_habits {
+        use super::*;
+
+        #[test]
+        fn only_players_on_the_pitch_available_for_selection() {
+
+        }
+
+        #[test]
+        fn players_with_loner_skill_not_selectable() {
+
+        }
+
+        #[test]
+        fn skill_is_lost_at_end_of_drive() {
+
         }
     }
 }
