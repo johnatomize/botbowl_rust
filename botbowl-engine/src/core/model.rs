@@ -425,7 +425,9 @@ impl PlayerStats {
         std::cmp::min(self.av + self.temp_av, 11)
     }
     pub fn add_temporary_av(&mut self, amount: u8) {
-        self.temp_av = 11u8.saturating_sub(self.av).min(self.temp_av.saturating_add(amount));
+        self.temp_av = 11u8
+            .saturating_sub(self.av)
+            .min(self.temp_av.saturating_add(amount));
     }
     pub fn clear_temporary_av(&mut self) {
         self.temp_av = 0;

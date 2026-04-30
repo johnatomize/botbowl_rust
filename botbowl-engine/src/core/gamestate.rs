@@ -9,7 +9,9 @@ use std::{
     collections::{HashSet, VecDeque},
 };
 
-use crate::core::{bb_errors::EmptyProcStackError, dices::D16, model, procedures::CoinToss, table::TemporarySkill};
+use crate::core::{
+    bb_errors::EmptyProcStackError, dices::D16, model, procedures::CoinToss, table::TemporarySkill,
+};
 
 use model::*;
 
@@ -1740,7 +1742,6 @@ mod gamestate_tests {
         Ok(())
     }
 
-
     #[test]
     fn random_player_helpers_return_empty_when_team_has_no_players_on_pitch() -> Result<()> {
         let mut state = standard_state();
@@ -1752,11 +1753,9 @@ mod gamestate_tests {
             state.unfield_player(id, DugoutPlace::Reserves)?;
         }
 
-        assert!(
-            state
-                .get_random_player_ids_on_pitch_in_team(TeamType::Home, 1)
-                .is_empty()
-        );
+        assert!(state
+            .get_random_player_ids_on_pitch_in_team(TeamType::Home, 1)
+            .is_empty());
         Ok(())
     }
 

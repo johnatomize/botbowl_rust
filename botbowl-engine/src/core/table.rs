@@ -70,14 +70,14 @@ pub enum Skill {
     Loner2,
     Stab,
     MightyBlow1,
-    MightyBlow2
+    MightyBlow2,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TemporarySkill {
     Stab,
     MightyBlow1,
-    Loner2
+    Loner2,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
