@@ -4,7 +4,9 @@ use crate::core::model::Procedure;
 use crate::core::procedures::ball_procs::{
     Bounce, Catch, Deflect, DeflectOrResolve, Pass, PickupProc, ThrowIn, Touchback, Touchdown,
 };
-use crate::core::procedures::nuffle_prayers_procs::{FirendsWithTheRef, IronMan, KnuckleDusters, PrayersToNuffle, Stiletto, TrapdoorCheck};
+use crate::core::procedures::nuffle_prayers_procs::{
+    BadHabit, FirendsWithTheRef, IronMan, KnuckleDusters, PrayersToNuffle, Stiletto, TrapdoorCheck,
+};
 use crate::core::procedures::{Blitz, BrilliantCoaching, OfficiousRef, PitchInvasion, QuickSnap};
 
 use crate::core::procedures::block_procs::{Block, BlockAction, FollowUp, KnockDown, Push};
@@ -23,6 +25,7 @@ use crate::core::procedures::procedure_tools::SimpleProcContainer;
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum AnyProc {
     Armor(Armor),
+    BadHabit(BadHabit),
     Blitz(Blitz),
     Block(Block),
     BlockAction(BlockAction),
@@ -75,6 +78,7 @@ impl std::fmt::Debug for AnyProc {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Armor(arg0) => f.debug_tuple("Armor").field(arg0).finish(),
+            Self::BadHabit(arg0) => f.debug_tuple("BadHabit").field(arg0).finish(),
             Self::Blitz(arg0) => f.debug_tuple("Blitz").field(arg0).finish(),
             Self::Block(arg0) => f.debug_tuple("Block").field(arg0).finish(),
             Self::BlockAction(arg0) => f.debug_tuple("BlockAction").field(arg0).finish(),
@@ -94,7 +98,9 @@ impl std::fmt::Debug for AnyProc {
             Self::DodgeProc(arg0) => f.debug_tuple("DodgeProc").field(arg0).finish(),
             Self::Ejection(arg0) => f.debug_tuple("Ejection").field(arg0).finish(),
             Self::FollowUp(arg0) => f.debug_tuple("FollowUp").field(arg0).finish(),
-            Self::FirendsWithTheRef(arg0) => f.debug_tuple("FriendsWithTheRef").field(arg0).finish(),
+            Self::FirendsWithTheRef(arg0) => {
+                f.debug_tuple("FriendsWithTheRef").field(arg0).finish()
+            }
             Self::GameOver(arg0) => f.debug_tuple("GameOver").field(arg0).finish(),
             Self::GfiProc(arg0) => f.debug_tuple("GfiProc").field(arg0).finish(),
             Self::Half(arg0) => f.debug_tuple("Half").field(arg0).finish(),
@@ -140,6 +146,7 @@ impl Procedure for AnyProc {
     ) -> crate::core::model::ProcState {
         match self {
             AnyProc::Armor(arg) => arg.step(game_state, input),
+            AnyProc::BadHabit(arg) => arg.step(game_state, input),
             AnyProc::Blitz(arg) => arg.step(game_state, input),
             AnyProc::Block(arg) => arg.step(game_state, input),
             AnyProc::BlockAction(arg) => arg.step(game_state, input),

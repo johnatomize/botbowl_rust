@@ -49,6 +49,7 @@ impl Half {
         game_state.away.clear_friends_with_the_ref();
         game_state.clear_temporary_skill_from_all_players(TemporarySkill::Stab);
         game_state.clear_temporary_skill_from_all_players(TemporarySkill::MightyBlow1);
+        game_state.clear_temporary_skill_from_all_players(TemporarySkill::Loner2);
         game_state.clear_temporary_av_from_all_players();
         game_state.info.kicking_this_drive = kicking_team;
 

@@ -1,10 +1,13 @@
 use serde::{Deserialize, Serialize};
 
 use crate::core::{
-    dices::{D6, D6Target, D16, RequestedRoll, RollResult, RollTarget},
+    dices::{D6Target, RequestedRoll, RollResult, RollTarget, D16, D6},
     gamestate::GameState,
-    model::{Action, AvailableActions, BallState, PlayerID, Position, ProcInput, ProcState, Procedure, TeamType},
-    procedures::{AnyProc, ball_procs, casualty_procs},
+    model::{
+        other_team, Action, AvailableActions, BallState, PlayerID, Position, ProcInput, ProcState,
+        Procedure, TeamType,
+    },
+    procedures::{ball_procs, casualty_procs, AnyProc},
     table::{PosAT, Skill, TemporarySkill},
 };
 
@@ -46,18 +49,16 @@ impl Procedure for PrayersToNuffle {
                 procs.push(KnuckleDusters::new(self.team));
             }
             D16::Six => {
-                // Todo: implement Bad Habits. The rules for Bad Habits are:
-                // Randomly select D3 opposition players that are available to play during this drive and that do not have the Loner (X+) trait. 
-                // Until the end of this drive, those players gain the Loner (2+) trait.
+                procs.push(BadHabit::new(self.team));
             }
             D16::Seven => {
                 // Todo: implement Greasy Cleats. The rules for Greasy Cleats are:
-                // Randomly select one opposition player that is available to play during this drive. 
+                // Randomly select one opposition player that is available to play during this drive.
                 // That player has had their boots tampered with! Until the end of this drive, their MA is reduced by 1.
             }
             D16::Eight => {
                 // Todo: implement Blessed Statue of Nuffle. The rules for Blessed Statue of Nuffle are:
-                // Choose one player on your team that is available to play during this drive and that does not have the Loner (X+) trait. 
+                // Choose one player on your team that is available to play during this drive and that does not have the Loner (X+) trait.
                 // Until the end of this game, that player gains the Pro skill.
             }
             D16::Nine => {
@@ -71,7 +72,7 @@ impl Procedure for PrayersToNuffle {
             }
             D16::Eleven => {
                 // Todo: implement Fan Interaction. The rules for Fan Interaction are:
-                // Until the end of this drive, if a player on your team causes a Casualty by pushing an opponent into the crowd, 
+                // Until the end of this drive, if a player on your team causes a Casualty by pushing an opponent into the crowd,
                 // that player will earn 2 SPP exactly as if they had caused a Casualty by performing a Block action.
             }
             D16::Twelve => {
@@ -85,17 +86,17 @@ impl Procedure for PrayersToNuffle {
             }
             D16::Fourteen => {
                 // Todo: implement Throw a Rock. The rules for Throw a Rock are:
-                // Until the end of this drive, should an opposition player Stall, at the end of their team turn you may roll a D6. 
+                // Until the end of this drive, should an opposition player Stall, at the end of their team turn you may roll a D6.
                 // On a roll of 5+, an angry fan throws a rock at that player. The player is immediately Knocked Down.
             }
             D16::Fifteen => {
                 // Todo: implement Under Scrutiny. The rules for Under Scrutiny are:
-                // Until the end of this half, any player on the opposing team that commits a Foul action is automatically seen by the referee, 
+                // Until the end of this half, any player on the opposing team that commits a Foul action is automatically seen by the referee,
                 // even if a natural double is not rolled.
             }
             D16::Sixteen => {
                 // Todo: implement Intensive Training. The rules for Intensive Training are:
-                // Randomly select one player on your team that is available to play during this drive and that does not have the Loner (X+) trait. 
+                // Randomly select one player on your team that is available to play during this drive and that does not have the Loner (X+) trait.
                 //Until the end of this game, that player gains a single Primary skill of your choice.
             }
         }
@@ -186,9 +187,9 @@ impl Procedure for FirendsWithTheRef {
 pub struct Stiletto {
     team: TeamType,
 }
-impl Stiletto { 
+impl Stiletto {
     fn new(team: TeamType) -> AnyProc {
-        AnyProc::Stiletto(Stiletto {team})
+        AnyProc::Stiletto(Stiletto { team })
     }
 
     fn eligible_players(&self, game_state: &GameState) -> Vec<PlayerID> {
@@ -227,14 +228,13 @@ impl Procedure for Stiletto {
     }
 }
 
-
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IronMan {
-    team: TeamType
+    team: TeamType,
 }
 impl IronMan {
     fn new(team: TeamType) -> AnyProc {
-        AnyProc::IronMan(IronMan {team})
+        AnyProc::IronMan(IronMan { team })
     }
 
     fn eligible_positions(&self, game_state: &GameState) -> Vec<Position> {
@@ -289,11 +289,11 @@ impl Procedure for IronMan {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KnuckleDusters {
-    team: TeamType
+    team: TeamType,
 }
 impl KnuckleDusters {
     fn new(team: TeamType) -> AnyProc {
-        AnyProc::KnuckleDusters(KnuckleDusters {team})
+        AnyProc::KnuckleDusters(KnuckleDusters { team })
     }
 
     fn eligible_players(&self, game_state: &GameState) -> Vec<PlayerID> {
@@ -334,19 +334,84 @@ impl Procedure for KnuckleDusters {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BadHabit {
-
+    team: TeamType,
+    remaining_players: Vec<PlayerID>,
+    remaining_selections: usize,
+    count_rolled: bool,
 }
 impl BadHabit {
+    fn new(team: TeamType) -> AnyProc {
+        AnyProc::BadHabit(BadHabit {
+            team,
+            remaining_players: Vec::new(),
+            remaining_selections: 0,
+            count_rolled: false,
+        })
+    }
 
+    fn eligible_players(&self, game_state: &GameState) -> Vec<PlayerID> {
+        game_state
+            .get_players_on_pitch_in_team(other_team(self.team))
+            .filter(|player| {
+                !player.has_skill(Skill::Loner2)
+                    && !player.has_skill(Skill::Loner3)
+                    && !player.has_skill(Skill::Loner4)
+                    && !player.has_temporary_skill(TemporarySkill::Loner2)
+            })
+            .map(|player| player.id)
+            .collect()
+    }
+
+    fn next_state(&self) -> ProcState {
+        if self.remaining_selections == 0 || self.remaining_players.is_empty() {
+            ProcState::Done
+        } else {
+            ProcState::NeedRoll(RequestedRoll::D16)
+        }
+    }
 }
 impl Procedure for BadHabit {
+    fn step(&mut self, game_state: &mut GameState, input: ProcInput) -> ProcState {
+        if !self.count_rolled {
+            match input {
+                ProcInput::Nothing => ProcState::NeedRoll(RequestedRoll::D3),
+                ProcInput::Roll(RollResult::D3(roll)) => {
+                    self.count_rolled = true;
+                    self.remaining_selections = roll as usize;
+                    self.remaining_players = self.eligible_players(game_state);
+                    self.next_state()
+                }
+                _ => panic!("Unexpected input {:?}", input),
+            }
+        } else {
+            match input {
+                ProcInput::Nothing => self.next_state(),
+                ProcInput::Roll(RollResult::D16(roll)) => {
+                    let index = roll as usize - 1;
+                    let Some(id) = (index < self.remaining_players.len())
+                        .then(|| self.remaining_players.swap_remove(index))
+                    else {
+                        return ProcState::NeedRoll(RequestedRoll::D16);
+                    };
 
+                    game_state
+                        .get_mut_player(id)
+                        .expect("eligible player must still be on the pitch")
+                        .stats
+                        .give_temporary_skill(TemporarySkill::Loner2);
+                    self.remaining_selections -= 1;
+                    self.next_state()
+                }
+                _ => panic!("Unexpected input {:?}", input),
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::core::{
-        dices::{RequestedRoll, RollResult, D16, D6},
+        dices::{RequestedRoll, RollResult, D16, D3, D6},
         gamestate::{GameState, GameStateBuilder},
         model::{Action, PlayerID, PlayerStats, Position, ProcInput, TeamType},
         procedures::Ejection,
@@ -380,7 +445,10 @@ mod tests {
                 panic!("Expected Friends with the Ref activator proc");
             };
 
-            assert!(matches!(effect.step(state, ProcInput::Nothing), ProcState::Done));
+            assert!(matches!(
+                effect.step(state, ProcInput::Nothing),
+                ProcState::Done
+            ));
         }
 
         fn build_single_player_state(team: TeamType, position: Position) -> GameState {
@@ -515,7 +583,10 @@ mod tests {
     }
 
     mod stiletto {
-        use crate::core::{model::DugoutPlace, table::{Skill, TemporarySkill}};
+        use crate::core::{
+            model::DugoutPlace,
+            table::{Skill, TemporarySkill},
+        };
 
         use super::*;
 
@@ -559,11 +630,17 @@ mod tests {
             let on_pitch_id = state
                 .add_new_player_to_field(PlayerStats::new_lineman(TeamType::Home), start_pos)
                 .unwrap();
-            state.dugout_add_new_player(PlayerStats::new_lineman(TeamType::Home), DugoutPlace::Reserves);
+            state.dugout_add_new_player(
+                PlayerStats::new_lineman(TeamType::Home),
+                DugoutPlace::Reserves,
+            );
 
             activate_stiletto(&mut state, TeamType::Home, D16::One);
 
-            assert!(state.get_player(on_pitch_id).unwrap().has_temporary_skill(TemporarySkill::Stab));
+            assert!(state
+                .get_player(on_pitch_id)
+                .unwrap()
+                .has_temporary_skill(TemporarySkill::Stab));
             assert!(state
                 .get_dugout()
                 .filter(|player| player.stats.team == TeamType::Home)
@@ -578,15 +655,23 @@ mod tests {
 
             let mut loner_stats = PlayerStats::new_lineman(TeamType::Home);
             loner_stats.give_skill(Skill::Loner3);
-            let loner_id = state.add_new_player_to_field(loner_stats, loner_pos).unwrap();
+            let loner_id = state
+                .add_new_player_to_field(loner_stats, loner_pos)
+                .unwrap();
             let normal_id = state
                 .add_new_player_to_field(PlayerStats::new_lineman(TeamType::Home), normal_pos)
                 .unwrap();
 
             activate_stiletto(&mut state, TeamType::Home, D16::One);
 
-            assert!(!state.get_player(loner_id).unwrap().has_temporary_skill(TemporarySkill::Stab));
-            assert!(state.get_player(normal_id).unwrap().has_temporary_skill(TemporarySkill::Stab));
+            assert!(!state
+                .get_player(loner_id)
+                .unwrap()
+                .has_temporary_skill(TemporarySkill::Stab));
+            assert!(state
+                .get_player(normal_id)
+                .unwrap()
+                .has_temporary_skill(TemporarySkill::Stab));
         }
 
         #[test]
@@ -600,7 +685,10 @@ mod tests {
 
             let id = state.get_player_id_at(start_pos).unwrap();
             activate_stiletto(&mut state, TeamType::Home, D16::One);
-            assert!(state.get_player(id).unwrap().has_temporary_skill(TemporarySkill::Stab));
+            assert!(state
+                .get_player(id)
+                .unwrap()
+                .has_temporary_skill(TemporarySkill::Stab));
 
             state.step_positional(crate::core::table::PosAT::StartMove, start_pos);
             state.step_positional(crate::core::table::PosAT::Move, td_pos);
@@ -614,7 +702,10 @@ mod tests {
     }
 
     mod iron_man {
-        use crate::core::{model::DugoutPlace, table::{PosAT, Skill}};
+        use crate::core::{
+            model::DugoutPlace,
+            table::{PosAT, Skill},
+        };
 
         use super::*;
 
@@ -662,7 +753,10 @@ mod tests {
             let on_pitch_id = state
                 .add_new_player_to_field(PlayerStats::new_lineman(TeamType::Home), start_pos)
                 .unwrap();
-            state.dugout_add_new_player(PlayerStats::new_lineman(TeamType::Home), DugoutPlace::Reserves);
+            state.dugout_add_new_player(
+                PlayerStats::new_lineman(TeamType::Home),
+                DugoutPlace::Reserves,
+            );
 
             activate_iron_man(&mut state, TeamType::Home, start_pos);
 
@@ -681,7 +775,9 @@ mod tests {
 
             let mut loner_stats = PlayerStats::new_lineman(TeamType::Home);
             loner_stats.give_skill(Skill::Loner3);
-            let loner_id = state.add_new_player_to_field(loner_stats, loner_pos).unwrap();
+            let loner_id = state
+                .add_new_player_to_field(loner_stats, loner_pos)
+                .unwrap();
             let normal_id = state
                 .add_new_player_to_field(PlayerStats::new_lineman(TeamType::Home), normal_pos)
                 .unwrap();
@@ -755,7 +851,9 @@ mod tests {
 
             let mut maxed_stats = PlayerStats::new_lineman(TeamType::Home);
             maxed_stats.av = 11;
-            let maxed_id = state.add_new_player_to_field(maxed_stats, maxed_pos).unwrap();
+            let maxed_id = state
+                .add_new_player_to_field(maxed_stats, maxed_pos)
+                .unwrap();
             let normal_id = state
                 .add_new_player_to_field(PlayerStats::new_lineman(TeamType::Home), normal_pos)
                 .unwrap();
@@ -817,7 +915,10 @@ mod tests {
     }
 
     mod knuckle_dusters {
-        use crate::core::{model::DugoutPlace, table::{Skill, TemporarySkill}};
+        use crate::core::{
+            model::DugoutPlace,
+            table::{Skill, TemporarySkill},
+        };
 
         use super::*;
 
@@ -875,7 +976,9 @@ mod tests {
             assert!(state
                 .get_dugout()
                 .filter(|player| player.stats.team == TeamType::Home)
-                .all(|player| !player.stats.has_temporary_skill(TemporarySkill::MightyBlow1)));
+                .all(|player| !player
+                    .stats
+                    .has_temporary_skill(TemporarySkill::MightyBlow1)));
         }
 
         #[test]
@@ -886,7 +989,9 @@ mod tests {
 
             let mut loner_stats = PlayerStats::new_lineman(TeamType::Home);
             loner_stats.give_skill(Skill::Loner3);
-            let loner_id = state.add_new_player_to_field(loner_stats, loner_pos).unwrap();
+            let loner_id = state
+                .add_new_player_to_field(loner_stats, loner_pos)
+                .unwrap();
             let normal_id = state
                 .add_new_player_to_field(PlayerStats::new_lineman(TeamType::Home), normal_pos)
                 .unwrap();
@@ -926,26 +1031,154 @@ mod tests {
             assert!(state
                 .get_dugout()
                 .filter(|player| player.stats.team == TeamType::Home)
-                .all(|player| !player.stats.has_temporary_skill(TemporarySkill::MightyBlow1)));
+                .all(|player| !player
+                    .stats
+                    .has_temporary_skill(TemporarySkill::MightyBlow1)));
         }
     }
 
     mod bad_habits {
         use super::*;
+        use crate::core::model::DugoutPlace;
+
+        fn activate_bad_habits(
+            state: &mut GameState,
+            team: TeamType,
+            victim_count_roll: D3,
+            selection_rolls: &[D16],
+        ) {
+            let mut prayer = match PrayersToNuffle::new(team) {
+                AnyProc::PrayersToNuffle(proc) => proc,
+                _ => unreachable!(),
+            };
+
+            assert!(matches!(
+                prayer.step(state, ProcInput::Nothing),
+                ProcState::NeedRoll(RequestedRoll::D16)
+            ));
+
+            let ProcState::DoneNewProcs(mut procs) =
+                prayer.step(state, ProcInput::Roll(RollResult::D16(D16::Six)))
+            else {
+                panic!("Bad Habits should enqueue its activator proc");
+            };
+
+            assert_eq!(procs.len(), 1);
+            let AnyProc::BadHabit(mut effect) = procs.pop().unwrap() else {
+                panic!("Expected Bad Habits activator proc");
+            };
+
+            assert!(matches!(
+                effect.step(state, ProcInput::Nothing),
+                ProcState::NeedRoll(RequestedRoll::D3)
+            ));
+
+            let mut proc_state =
+                effect.step(state, ProcInput::Roll(RollResult::D3(victim_count_roll)));
+            for (index, selection_roll) in selection_rolls.iter().enumerate() {
+                assert!(matches!(
+                    proc_state,
+                    ProcState::NeedRoll(RequestedRoll::D16)
+                ));
+                proc_state = effect.step(state, ProcInput::Roll(RollResult::D16(*selection_roll)));
+
+                if index + 1 < selection_rolls.len() {
+                    assert!(matches!(
+                        proc_state,
+                        ProcState::NeedRoll(RequestedRoll::D16)
+                    ));
+                }
+            }
+            assert!(matches!(proc_state, ProcState::Done));
+        }
 
         #[test]
         fn only_players_on_the_pitch_available_for_selection() {
+            let home_pos = Position::new((4, 5));
+            let away_pos = Position::new((5, 5));
+            let mut state = GameStateBuilder::empty_state();
 
+            let home_id = state
+                .add_new_player_to_field(PlayerStats::new_lineman(TeamType::Home), home_pos)
+                .unwrap();
+            let away_on_pitch_id = state
+                .add_new_player_to_field(PlayerStats::new_lineman(TeamType::Away), away_pos)
+                .unwrap();
+            state.dugout_add_new_player(
+                PlayerStats::new_lineman(TeamType::Away),
+                DugoutPlace::Reserves,
+            );
+
+            activate_bad_habits(&mut state, TeamType::Home, D3::One, &[D16::One]);
+
+            assert!(!state
+                .get_player(home_id)
+                .unwrap()
+                .has_temporary_skill(TemporarySkill::Loner2));
+            assert!(state
+                .get_player(away_on_pitch_id)
+                .unwrap()
+                .has_temporary_skill(TemporarySkill::Loner2));
+            assert!(state
+                .get_dugout()
+                .filter(|player| player.stats.team == TeamType::Away)
+                .all(|player| !player.stats.has_temporary_skill(TemporarySkill::Loner2)));
         }
 
         #[test]
         fn players_with_loner_skill_not_selectable() {
+            let loner_pos = Position::new((5, 5));
+            let normal_pos = Position::new((6, 5));
+            let mut state = GameStateBuilder::empty_state();
 
+            let mut loner_stats = PlayerStats::new_lineman(TeamType::Away);
+            loner_stats.give_skill(Skill::Loner3);
+            let loner_id = state
+                .add_new_player_to_field(loner_stats, loner_pos)
+                .unwrap();
+            let normal_id = state
+                .add_new_player_to_field(PlayerStats::new_lineman(TeamType::Away), normal_pos)
+                .unwrap();
+
+            activate_bad_habits(&mut state, TeamType::Home, D3::One, &[D16::One]);
+
+            assert!(!state
+                .get_player(loner_id)
+                .unwrap()
+                .has_temporary_skill(TemporarySkill::Loner2));
+            assert!(state
+                .get_player(normal_id)
+                .unwrap()
+                .has_temporary_skill(TemporarySkill::Loner2));
         }
 
         #[test]
         fn skill_is_lost_at_end_of_drive() {
+            let start_pos = Position::new((2, 5));
+            let td_pos = Position::new((1, 5));
+            let away_pos = Position::new((5, 5));
+            let mut state = GameStateBuilder::new()
+                .add_home_player(start_pos)
+                .add_ball_pos(start_pos)
+                .build();
 
+            let away_id = state
+                .add_new_player_to_field(PlayerStats::new_lineman(TeamType::Away), away_pos)
+                .unwrap();
+            activate_bad_habits(&mut state, TeamType::Home, D3::One, &[D16::One]);
+            assert!(state
+                .get_player(away_id)
+                .unwrap()
+                .has_temporary_skill(TemporarySkill::Loner2));
+
+            state.step_positional(crate::core::table::PosAT::StartMove, start_pos);
+            state.step_positional(crate::core::table::PosAT::Move, td_pos);
+
+            assert_eq!(state.home.score, 1);
+            assert!(state
+                .get_dugout()
+                .filter(|player| player.stats.team == TeamType::Away)
+                .all(|player| !player.stats.has_temporary_skill(TemporarySkill::Loner2)));
         }
     }
 }
