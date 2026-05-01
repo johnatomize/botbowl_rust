@@ -340,6 +340,7 @@ pub enum PlayerStatus {
 pub struct PlayerStats {
     pub str_: u8,
     pub ma: u8,
+    temp_ma: u8,
     pub ag: u8,
     pass: D6Target,
     pub av: u8,
@@ -431,6 +432,15 @@ impl PlayerStats {
     }
     pub fn clear_temporary_av(&mut self) {
         self.temp_av = 0;
+    }
+    pub fn ma(&self) -> u8 {
+        std::cmp::max(self.ma + self.temp_ma, 1)
+    }
+    pub fn add_temporary_ma($mut self, amount u8) {
+        //Todo: implement
+    }
+    pub fn clear_temporary_ma(&mut self) {
+        //Todo: implement
     }
 }
 
@@ -859,4 +869,15 @@ pub enum InjuryOutcome {
     Stunned,
     KO,
     Casualty,
+}
+
+mod tests {
+    use super::*;
+
+    #[test]
+    fn add_temporary_ma_should_support_negative_values() {
+        // Should test that if a negative value ma is added, then the ma should be temporarily decreased rather than increased
+        // by the amount of negative.
+        // Ex: if ma = 6, then if add_temporary_ma(-1) -> temp_ma = -1 -> ma = 6-1 = 5
+    }
 }

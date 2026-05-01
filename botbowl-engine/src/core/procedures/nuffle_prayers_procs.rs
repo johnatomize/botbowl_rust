@@ -192,6 +192,8 @@ impl Stiletto {
         AnyProc::Stiletto(Stiletto { team })
     }
 
+    //Todo: Also filter players with temporary skills Loner and temporary skill stab
+    //Todo: Also filter players with Skill::Loner2 and stab
     fn eligible_players(&self, game_state: &GameState) -> Vec<PlayerID> {
         game_state
             .get_players_on_pitch_in_team(self.team)
@@ -237,6 +239,8 @@ impl IronMan {
         AnyProc::IronMan(IronMan { team })
     }
 
+    //Todo: Also filter players with temporary skills Loner
+    //Todo: Also filter players with Skill::Loner2 
     fn eligible_positions(&self, game_state: &GameState) -> Vec<Position> {
         game_state
             .get_players_on_pitch_in_team(self.team)
@@ -296,6 +300,8 @@ impl KnuckleDusters {
         AnyProc::KnuckleDusters(KnuckleDusters { team })
     }
 
+    //Todo: also filter players with temporary skills Loner or Mighty Blow
+    //Todo: also filter players with Skill::Loner2 and mighty blow
     fn eligible_players(&self, game_state: &GameState) -> Vec<PlayerID> {
         game_state
             .get_players_on_pitch_in_team(self.team)
@@ -405,6 +411,20 @@ impl Procedure for BadHabit {
                 _ => panic!("Unexpected input {:?}", input),
             }
         }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GreasyCleats {
+    team: TeamType
+}
+impl GreasyCleats {
+    fn new(team: TeamType) -> AnyProc {AnyProc::GreasyCleats(GreasyCleats{team})}
+
+}
+impl Procedure for GreasyCleats {
+    fn step(&mut self, game_state: &mut GameState, input: ProcInput) -> ProcState {
+        
     }
 }
 
@@ -1180,5 +1200,24 @@ mod tests {
                 .filter(|player| player.stats.team == TeamType::Away)
                 .all(|player| !player.stats.has_temporary_skill(TemporarySkill::Loner2)));
         }
+    }
+
+    mod greasy_cleats {
+        use super::*;
+
+        #[test]
+        fn only_players_on_the_pitch_available_for_selection() {}
+
+        #[test]
+        fn players_with_loner_skill_not_selectable() {}
+        
+        #[test]
+        fn movement_allowance_is_restored_at_the_end_of_the_drive() {}
+
+        #[test]
+        fn player_with_movement_allowance_zero_should_not_be_elegible() {}
+
+        #[test]
+        fn player_that_already_has_temporary_reduced_movement_allowance_should_still_be_elegible() {}
     }
 }

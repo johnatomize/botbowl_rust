@@ -887,6 +887,7 @@ impl GameState {
             .flatten()
             .for_each(|player| player.stats.remove_temporary_skill(temporary_skill));
     }
+    //Todo: remake into general clear_temporary_attribute_from_all_players(TemporaryAttribute)
     pub fn clear_temporary_av_from_all_players(&mut self) {
         self.fielded_players
             .iter_mut()
