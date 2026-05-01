@@ -634,7 +634,7 @@ mod tests {
             .build();
 
         let id = state.get_player_id_at(start_pos).unwrap();
-        let ma = state.get_player_unsafe(id).stats.ma;
+        let ma = state.get_player_unsafe(id).stats.ma();
         state.get_mut_player_unsafe(id).moves = ma;
         assert_eq!(state.get_player_unsafe(id).moves_left(), 0);
         assert_eq!(state.get_player_unsafe(id).total_movement_left(), 2);

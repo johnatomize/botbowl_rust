@@ -547,7 +547,7 @@ mod tests {
         let victim_id = state.get_player_id_at(target_pos).unwrap();
         state.get_mut_player_unsafe(victim_id).status = PlayerStatus::Down;
         let id = state.get_player_id_at(start_pos).unwrap();
-        let ma = state.get_player_unsafe(id).stats.ma;
+        let ma = state.get_player_unsafe(id).stats.ma();
         state.get_mut_player_unsafe(id).moves = ma;
         assert_eq!(state.get_player_unsafe(id).moves_left(), 0);
         assert_eq!(state.get_player_unsafe(id).total_movement_left(), 2);
@@ -586,7 +586,7 @@ mod tests {
             .add_ball_pos(start_pos)
             .build();
         let id = state.get_player_id_at(start_pos).unwrap();
-        let ma = state.get_player_unsafe(id).stats.ma;
+        let ma = state.get_player_unsafe(id).stats.ma();
         state.get_mut_player_unsafe(id).moves = ma;
         assert_eq!(state.get_player_unsafe(id).moves_left(), 0);
         assert_eq!(state.get_player_unsafe(id).total_movement_left(), 2);
@@ -620,7 +620,7 @@ mod tests {
             .add_ball_pos(start_pos)
             .build();
         let id = state.get_player_id_at(start_pos).unwrap();
-        let ma = state.get_player_unsafe(id).stats.ma;
+        let ma = state.get_player_unsafe(id).stats.ma();
         state.get_mut_player_unsafe(id).moves = ma;
         assert_eq!(state.get_player_unsafe(id).moves_left(), 0);
         assert_eq!(state.get_player_unsafe(id).total_movement_left(), 2);
@@ -837,7 +837,7 @@ mod tests {
             .add_away_player(target_pos)
             .build();
         let id = state.get_player_id_at(start_pos).unwrap();
-        let ma = state.get_player_unsafe(id).stats.ma;
+        let ma = state.get_player_unsafe(id).stats.ma();
         state.get_mut_player_unsafe(id).moves = ma;
         assert_eq!(state.get_player_unsafe(id).moves_left(), 0);
         assert_eq!(state.get_player_unsafe(id).total_movement_left(), 2);
@@ -917,7 +917,7 @@ mod tests {
         assert_eq!(state.get_player_unsafe(id).status, PlayerStatus::Up);
         assert_eq!(
             state.get_player_unsafe(id).moves_left(),
-            state.get_player_unsafe(id).stats.ma - 3 - 3
+            state.get_player_unsafe(id).stats.ma() - 3 - 3
         );
 
         state.step_simple(SimpleAT::SelectPush);
@@ -965,7 +965,7 @@ mod tests {
         assert!(state.home_to_act());
         let player = state.get_player_unsafe(id);
         assert_eq!(player.status, PlayerStatus::Down);
-        assert_eq!(player.moves_left(), player.stats.ma);
+        assert_eq!(player.moves_left(), player.stats.ma());
         assert_eq!(player.gfis_left(), 2);
         state.step_positional(PosAT::StartMove, move_target)
     }

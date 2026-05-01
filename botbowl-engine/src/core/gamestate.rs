@@ -757,8 +757,8 @@ impl GameState {
         // debug_assert!(attr.has_tackle_zone());
         debug_assert_eq!(defr.status, PlayerStatus::Up);
 
-        let mut attr_str = attr.stats.str_;
-        let mut defr_str = defr.stats.str_;
+        let mut attr_str = attr.stats.str_();
+        let mut defr_str = defr.stats.str_();
 
         attr_str += self
             .get_adj_players(defr.position)
@@ -887,7 +887,7 @@ impl GameState {
             .flatten()
             .for_each(|player| player.stats.remove_temporary_skill(temporary_skill));
     }
-    //Todo: remake into general clear_temporary_attribute_from_all_players(TemporaryAttribute)
+    //Todo: remake into general clear_temporary_attributes_from_all_players()
     pub fn clear_temporary_av_from_all_players(&mut self) {
         self.fielded_players
             .iter_mut()

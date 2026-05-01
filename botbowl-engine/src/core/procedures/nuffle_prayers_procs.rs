@@ -784,7 +784,7 @@ mod tests {
             assert!(state
                 .get_dugout()
                 .filter(|player| player.stats.team == TeamType::Home)
-                .all(|player| player.stats.av() == player.stats.av));
+                .all(|player| player.stats.av() == 8));
         }
 
         #[test]
@@ -860,7 +860,7 @@ mod tests {
             assert!(state
                 .get_dugout()
                 .filter(|player| player.stats.team == TeamType::Home)
-                .all(|player| player.stats.av() == player.stats.av));
+                .all(|player| player.stats.av() == 8));
         }
 
         #[test]
@@ -870,7 +870,7 @@ mod tests {
             let mut state = GameStateBuilder::empty_state();
 
             let mut maxed_stats = PlayerStats::new_lineman(TeamType::Home);
-            maxed_stats.av = 11;
+            maxed_stats.set_av(11);
             let maxed_id = state
                 .add_new_player_to_field(maxed_stats, maxed_pos)
                 .unwrap();
@@ -917,7 +917,7 @@ mod tests {
 
             let mut all_maxed_state = GameStateBuilder::empty_state();
             let mut all_maxed_stats = PlayerStats::new_lineman(TeamType::Home);
-            all_maxed_stats.av = 11;
+            all_maxed_stats.set_av(11);
             all_maxed_state
                 .add_new_player_to_field(all_maxed_stats, maxed_pos)
                 .unwrap();

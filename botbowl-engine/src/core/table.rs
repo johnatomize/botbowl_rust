@@ -1,6 +1,8 @@
 //use super::model::{PlayerID, TeamType};
 use serde::{Deserialize, Serialize};
 
+use crate::core::dices::D6Target;
+
 #[derive(Debug, Eq, Hash, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum PosAT {
     StartMove,
@@ -55,6 +57,20 @@ impl From<PosAT> for AnyAT {
     fn from(at: PosAT) -> Self {
         AnyAT::Postional(at)
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Attributes {
+    pub strength: u8,
+    pub movement_allowance: u8,
+    pub agility: u8,
+    pub pass: D6Target,
+    pub armor_value: u8,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct TemporaryAttributes {
+    pub movement_allowance: i8,
+    pub armor_value: i8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
