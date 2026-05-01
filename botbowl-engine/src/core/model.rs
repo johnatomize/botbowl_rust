@@ -465,11 +465,16 @@ impl PlayerStats {
         self.temporary_attributes.armor_value = 0;
     }
     pub fn add_temporary_ma(&mut self, amount: i8) {
-        self.temporary_attributes.movement_allowance =
-            self.temporary_attributes.movement_allowance.saturating_add(amount);
+        self.temporary_attributes.movement_allowance = self
+            .temporary_attributes
+            .movement_allowance
+            .saturating_add(amount);
     }
     pub fn clear_temporary_ma(&mut self) {
         self.temporary_attributes.movement_allowance = 0;
+    }
+    pub fn set_ma(&mut self, ma: u8) {
+        self.attributes.movement_allowance = ma;
     }
     pub fn set_av(&mut self, av: u8) {
         self.attributes.armor_value = av;
@@ -903,13 +908,20 @@ pub enum InjuryOutcome {
     Casualty,
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn add_temporary_ma_should_support_negative_values() {
-        // Should test that if a negative value ma is added, then the ma should be temporarily decreased rather than increased
-        // by the amount of negative.
-        // Ex: if ma = 6, then if add_temporary_ma(-1) -> temp_ma = -1 -> ma = 6-1 = 5
+        let mut stats = PlayerStats::new_lineman(TeamType::Home);
+
+        assert_eq!(stats.ma(), 6);
+
+        stats.add_temporary_ma(-1);
+        assert_eq!(stats.ma(), 5);
+
+        stats.clear_temporary_ma();
+        assert_eq!(stats.ma(), 6);
     }
 }

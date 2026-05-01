@@ -5,7 +5,8 @@ use crate::core::procedures::ball_procs::{
     Bounce, Catch, Deflect, DeflectOrResolve, Pass, PickupProc, ThrowIn, Touchback, Touchdown,
 };
 use crate::core::procedures::nuffle_prayers_procs::{
-    BadHabit, FirendsWithTheRef, GreasyCleats, IronMan, KnuckleDusters, PrayersToNuffle, Stiletto, TrapdoorCheck
+    BadHabit, FirendsWithTheRef, GreasyCleats, IronMan, KnuckleDusters, PrayersToNuffle, Stiletto,
+    TrapdoorCheck,
 };
 use crate::core::procedures::{Blitz, BrilliantCoaching, OfficiousRef, PitchInvasion, QuickSnap};
 
