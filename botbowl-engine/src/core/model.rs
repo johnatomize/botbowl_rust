@@ -12,7 +12,7 @@ use super::gamestate::GameState;
 use super::pathing::Node;
 use super::procedures::AnyProc;
 use super::table::{ArgueTheCall, NumBlockDices, PlayerRole, PosAT, SimpleAT, Skill};
-use crate::core::table::{self, TemporarySkill};
+use crate::core::table::{self, Attributes, TemporaryAttributes, TemporarySkill};
 
 pub type PlayerID = usize;
 pub type DugoutPlayerID = usize;
@@ -338,13 +338,9 @@ pub enum PlayerStatus {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlayerStats {
-    pub str_: u8,
-    pub ma: u8,
-    pub ag: u8,
-    pass: D6Target,
-    pub av: u8,
-    temp_av: u8,
     pub team: TeamType,
+    attributes: Attributes,
+    temporary_attributes: TemporaryAttributes,
     skills: HashSet<Skill>,
     temporary_skills: HashSet<TemporarySkill>,
     pub role: PlayerRole,
@@ -353,61 +349,79 @@ pub struct PlayerStats {
     //spp
 }
 impl PlayerStats {
-    pub fn new_lineman(team: TeamType) -> PlayerStats {
+    fn new(
+        team: TeamType,
+        role: PlayerRole,
+        str_: u8,
+        ma: u8,
+        ag: u8,
+        pass: D6Target,
+        av: u8,
+        skills: HashSet<Skill>,
+    ) -> PlayerStats {
         PlayerStats {
-            str_: 3,
-            ma: 6,
-            ag: 3,
-            av: 8,
-            temp_av: 0,
             team,
-            skills: HashSet::new(),
+            attributes: Attributes {
+                strength: str_,
+                movement_allowance: ma,
+                agility: ag,
+                pass,
+                armor_value: av,
+            },
+            temporary_attributes: TemporaryAttributes::default(),
+            skills,
             temporary_skills: HashSet::new(),
-            role: PlayerRole::Lineman,
-            pass: D6Target::FourPlus,
+            role,
         }
+    }
+
+    pub fn new_lineman(team: TeamType) -> PlayerStats {
+        PlayerStats::new(
+            team,
+            PlayerRole::Lineman,
+            3,
+            6,
+            3,
+            D6Target::FourPlus,
+            8,
+            HashSet::new(),
+        )
     }
     pub fn new_blitzer(team: TeamType) -> PlayerStats {
-        PlayerStats {
-            str_: 3,
-            ma: 7,
-            ag: 3,
-            av: 9,
-            temp_av: 0,
+        PlayerStats::new(
             team,
-            skills: HashSet::from_iter([Skill::Block]),
-            temporary_skills: HashSet::new(),
-            role: PlayerRole::Blitzer,
-            pass: D6Target::FourPlus,
-        }
+            PlayerRole::Blitzer,
+            3,
+            7,
+            3,
+            D6Target::FourPlus,
+            9,
+            HashSet::from_iter([Skill::Block]),
+        )
     }
     pub fn new_catcher(team: TeamType) -> PlayerStats {
-        PlayerStats {
-            str_: 2,
-            ma: 8,
-            ag: 3,
-            av: 8,
-            temp_av: 0,
+        PlayerStats::new(
             team,
-            skills: HashSet::from_iter([Skill::Dodge, Skill::Catch]),
-            temporary_skills: HashSet::new(),
-            role: PlayerRole::Catcher,
-            pass: D6Target::FivePlus,
-        }
+            PlayerRole::Catcher,
+            2,
+            8,
+            3,
+            D6Target::FivePlus,
+            8,
+            HashSet::from_iter([Skill::Dodge, Skill::Catch]),
+        )
     }
     pub fn new_thrower(team: TeamType) -> PlayerStats {
-        PlayerStats {
-            str_: 3,
-            ma: 6,
-            ag: 3,
-            av: 8,
-            temp_av: 0,
+        PlayerStats::new(
             team,
-            skills: HashSet::from_iter([Skill::SureHands, Skill::Throw]),
-            temporary_skills: HashSet::new(),
-            role: PlayerRole::Thrower,
-            pass: D6Target::TwoPlus,
-        }
+            PlayerRole::Thrower,
+            3,
+            6,
+            3,
+            D6Target::TwoPlus,
+            8,
+            HashSet::from_iter([Skill::SureHands, Skill::Throw]),
+        )
     }
     pub fn give_skill(&mut self, skill: Skill) {
         self.skills.insert(skill);
@@ -421,16 +435,49 @@ impl PlayerStats {
     pub fn remove_temporary_skill(&mut self, skill: TemporarySkill) {
         self.temporary_skills.remove(&skill);
     }
+    pub fn str_(&self) -> u8 {
+        self.attributes.strength
+    }
+    pub fn ma(&self) -> u8 {
+        let ma = self.attributes.movement_allowance as i16
+            + self.temporary_attributes.movement_allowance as i16;
+        ma.max(1) as u8
+    }
+    pub fn ag(&self) -> u8 {
+        self.attributes.agility
+    }
+    pub fn pass(&self) -> D6Target {
+        self.attributes.pass
+    }
     pub fn av(&self) -> u8 {
-        std::cmp::min(self.av + self.temp_av, 11)
+        let av = self.attributes.armor_value as i16 + self.temporary_attributes.armor_value as i16;
+        av.clamp(1, 11) as u8
     }
     pub fn add_temporary_av(&mut self, amount: u8) {
-        self.temp_av = 11u8
-            .saturating_sub(self.av)
-            .min(self.temp_av.saturating_add(amount));
+        let max_temporary_av = 11u8.saturating_sub(self.attributes.armor_value) as i8;
+        self.temporary_attributes.armor_value = self
+            .temporary_attributes
+            .armor_value
+            .saturating_add(amount as i8)
+            .min(max_temporary_av);
     }
     pub fn clear_temporary_av(&mut self) {
-        self.temp_av = 0;
+        self.temporary_attributes.armor_value = 0;
+    }
+    pub fn add_temporary_ma(&mut self, amount: i8) {
+        self.temporary_attributes.movement_allowance = self
+            .temporary_attributes
+            .movement_allowance
+            .saturating_add(amount);
+    }
+    pub fn clear_temporary_ma(&mut self) {
+        self.temporary_attributes.movement_allowance = 0;
+    }
+    pub fn set_ma(&mut self, ma: u8) {
+        self.attributes.movement_allowance = ma;
+    }
+    pub fn set_av(&mut self, av: u8) {
+        self.attributes.armor_value = av;
     }
 }
 
@@ -466,11 +513,11 @@ impl FieldedPlayer {
     }
 
     pub fn ag_target(&self) -> D6Target {
-        D6Target::try_from(7 - self.stats.ag).unwrap()
+        D6Target::try_from(7 - self.stats.ag()).unwrap()
     }
 
     pub fn pass_target(&self) -> D6Target {
-        self.stats.pass
+        self.stats.pass()
     }
 
     pub fn can_catch(&self) -> bool {
@@ -490,8 +537,8 @@ impl FieldedPlayer {
     /// Returns how many normal moves the player has left. Before activating the player this is
     /// equal to MA (movement allowence)
     pub fn moves_left(&self) -> u8 {
-        if self.moves <= self.stats.ma {
-            self.stats.ma - self.moves
+        if self.moves <= self.stats.ma() {
+            self.stats.ma() - self.moves
         } else {
             0
         }
@@ -499,17 +546,17 @@ impl FieldedPlayer {
     /// Returns how many gfis the player has left. Before exhausting the normal moves,
     /// it's equal to 2
     pub fn gfis_left(&self) -> u8 {
-        if self.moves <= self.stats.ma {
+        if self.moves <= self.stats.ma() {
             2
         } else {
-            2 + self.stats.ma - self.moves
+            2 + self.stats.ma() - self.moves
         }
     }
     /// Ruturns the total number of mover the player has left, normal moves + gfis. Before
     /// activating the player, it's equal to MA + 2
     pub fn total_movement_left(&self) -> u8 {
-        debug_assert!(self.moves <= self.stats.ma + 2);
-        self.stats.ma + 2 - self.moves
+        debug_assert!(self.moves <= self.stats.ma() + 2);
+        self.stats.ma() + 2 - self.moves
     }
     pub fn add_move(&mut self, num_moves: u8) {
         assert!(self.total_movement_left() >= num_moves);
@@ -859,4 +906,22 @@ pub enum InjuryOutcome {
     Stunned,
     KO,
     Casualty,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn add_temporary_ma_should_support_negative_values() {
+        let mut stats = PlayerStats::new_lineman(TeamType::Home);
+
+        assert_eq!(stats.ma(), 6);
+
+        stats.add_temporary_ma(-1);
+        assert_eq!(stats.ma(), 5);
+
+        stats.clear_temporary_ma();
+        assert_eq!(stats.ma(), 6);
+    }
 }

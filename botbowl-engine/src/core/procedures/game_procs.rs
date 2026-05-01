@@ -51,6 +51,7 @@ impl Half {
         game_state.clear_temporary_skill_from_all_players(TemporarySkill::MightyBlow1);
         game_state.clear_temporary_skill_from_all_players(TemporarySkill::Loner2);
         game_state.clear_temporary_av_from_all_players();
+        game_state.clear_temporary_ma_from_all_players();
         game_state.info.kicking_this_drive = kicking_team;
 
         let procs: Vec<AnyProc> = vec![
@@ -634,7 +635,7 @@ mod tests {
             .build();
 
         let id = state.get_player_id_at(start_pos).unwrap();
-        let ma = state.get_player_unsafe(id).stats.ma;
+        let ma = state.get_player_unsafe(id).stats.ma();
         state.get_mut_player_unsafe(id).moves = ma;
         assert_eq!(state.get_player_unsafe(id).moves_left(), 0);
         assert_eq!(state.get_player_unsafe(id).total_movement_left(), 2);

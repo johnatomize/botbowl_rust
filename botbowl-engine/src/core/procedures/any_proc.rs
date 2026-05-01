@@ -5,7 +5,8 @@ use crate::core::procedures::ball_procs::{
     Bounce, Catch, Deflect, DeflectOrResolve, Pass, PickupProc, ThrowIn, Touchback, Touchdown,
 };
 use crate::core::procedures::nuffle_prayers_procs::{
-    BadHabit, FirendsWithTheRef, IronMan, KnuckleDusters, PrayersToNuffle, Stiletto, TrapdoorCheck,
+    BadHabit, FirendsWithTheRef, GreasyCleats, IronMan, KnuckleDusters, PrayersToNuffle, Stiletto,
+    TrapdoorCheck,
 };
 use crate::core::procedures::{Blitz, BrilliantCoaching, OfficiousRef, PitchInvasion, QuickSnap};
 
@@ -43,6 +44,7 @@ pub enum AnyProc {
     FirendsWithTheRef(FirendsWithTheRef),
     GameOver(GameOver),
     GfiProc(SimpleProcContainer<GfiProc>),
+    GreasyCleats(GreasyCleats),
     Half(Half),
     HighKick(HighKick),
     Injury(Injury),
@@ -103,6 +105,7 @@ impl std::fmt::Debug for AnyProc {
             }
             Self::GameOver(arg0) => f.debug_tuple("GameOver").field(arg0).finish(),
             Self::GfiProc(arg0) => f.debug_tuple("GfiProc").field(arg0).finish(),
+            Self::GreasyCleats(arg0) => f.debug_tuple("GreasyCleats").field(arg0).finish(),
             Self::Half(arg0) => f.debug_tuple("Half").field(arg0).finish(),
             Self::HighKick(arg0) => f.debug_tuple("HighKick").field(arg0).finish(),
             Self::Injury(arg0) => f.debug_tuple("Injury").field(arg0).finish(),
@@ -165,6 +168,7 @@ impl Procedure for AnyProc {
             AnyProc::FirendsWithTheRef(arg) => arg.step(game_state, input),
             AnyProc::GameOver(arg) => arg.step(game_state, input),
             AnyProc::GfiProc(arg) => arg.step(game_state, input),
+            AnyProc::GreasyCleats(arg) => arg.step(game_state, input),
             AnyProc::Half(arg) => arg.step(game_state, input),
             AnyProc::HighKick(arg) => arg.step(game_state, input),
             AnyProc::Injury(arg) => arg.step(game_state, input),

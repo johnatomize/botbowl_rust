@@ -52,9 +52,7 @@ impl Procedure for PrayersToNuffle {
                 procs.push(BadHabit::new(self.team));
             }
             D16::Seven => {
-                // Todo: implement Greasy Cleats. The rules for Greasy Cleats are:
-                // Randomly select one opposition player that is available to play during this drive.
-                // That player has had their boots tampered with! Until the end of this drive, their MA is reduced by 1.
+                procs.push(GreasyCleats::new(self.team));
             }
             D16::Eight => {
                 // Todo: implement Blessed Statue of Nuffle. The rules for Blessed Statue of Nuffle are:
@@ -192,6 +190,8 @@ impl Stiletto {
         AnyProc::Stiletto(Stiletto { team })
     }
 
+    //Todo: Also filter players with temporary skills Loner and temporary skill stab
+    //Todo: Also filter players with Skill::Loner2 and stab
     fn eligible_players(&self, game_state: &GameState) -> Vec<PlayerID> {
         game_state
             .get_players_on_pitch_in_team(self.team)
@@ -237,6 +237,8 @@ impl IronMan {
         AnyProc::IronMan(IronMan { team })
     }
 
+    //Todo: Also filter players with temporary skills Loner
+    //Todo: Also filter players with Skill::Loner2
     fn eligible_positions(&self, game_state: &GameState) -> Vec<Position> {
         game_state
             .get_players_on_pitch_in_team(self.team)
@@ -296,6 +298,8 @@ impl KnuckleDusters {
         AnyProc::KnuckleDusters(KnuckleDusters { team })
     }
 
+    //Todo: also filter players with temporary skills Loner or Mighty Blow
+    //Todo: also filter players with Skill::Loner2 and mighty blow
     fn eligible_players(&self, game_state: &GameState) -> Vec<PlayerID> {
         game_state
             .get_players_on_pitch_in_team(self.team)
@@ -404,6 +408,57 @@ impl Procedure for BadHabit {
                 }
                 _ => panic!("Unexpected input {:?}", input),
             }
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GreasyCleats {
+    team: TeamType,
+}
+impl GreasyCleats {
+    fn new(team: TeamType) -> AnyProc {
+        AnyProc::GreasyCleats(GreasyCleats { team })
+    }
+
+    fn eligible_players(&self, game_state: &GameState) -> Vec<PlayerID> {
+        game_state
+            .get_players_on_pitch_in_team(other_team(self.team))
+            .filter(|player| {
+                !player.has_skill(Skill::Loner2)
+                    && !player.has_skill(Skill::Loner3)
+                    && !player.has_skill(Skill::Loner4)
+                    && !player.has_temporary_skill(TemporarySkill::Loner2)
+                    && player.stats.ma() > 1
+            })
+            .map(|player| player.id)
+            .collect()
+    }
+}
+impl Procedure for GreasyCleats {
+    fn step(&mut self, game_state: &mut GameState, input: ProcInput) -> ProcState {
+        let eligible_players = self.eligible_players(game_state);
+
+        if eligible_players.is_empty() {
+            return ProcState::Done;
+        }
+
+        match input {
+            ProcInput::Nothing => ProcState::NeedRoll(RequestedRoll::D16),
+            ProcInput::Roll(RollResult::D16(roll)) => {
+                let index = roll as usize - 1;
+                let Some(id) = eligible_players.get(index).copied() else {
+                    return ProcState::NeedRoll(RequestedRoll::D16);
+                };
+
+                game_state
+                    .get_mut_player(id)
+                    .expect("eligible player must still be on the pitch")
+                    .stats
+                    .add_temporary_ma(-1);
+                ProcState::Done
+            }
+            _ => panic!("Unexpected input {:?}", input),
         }
     }
 }
@@ -764,7 +819,7 @@ mod tests {
             assert!(state
                 .get_dugout()
                 .filter(|player| player.stats.team == TeamType::Home)
-                .all(|player| player.stats.av() == player.stats.av));
+                .all(|player| player.stats.av() == 8));
         }
 
         #[test]
@@ -840,7 +895,7 @@ mod tests {
             assert!(state
                 .get_dugout()
                 .filter(|player| player.stats.team == TeamType::Home)
-                .all(|player| player.stats.av() == player.stats.av));
+                .all(|player| player.stats.av() == 8));
         }
 
         #[test]
@@ -850,7 +905,7 @@ mod tests {
             let mut state = GameStateBuilder::empty_state();
 
             let mut maxed_stats = PlayerStats::new_lineman(TeamType::Home);
-            maxed_stats.av = 11;
+            maxed_stats.set_av(11);
             let maxed_id = state
                 .add_new_player_to_field(maxed_stats, maxed_pos)
                 .unwrap();
@@ -897,7 +952,7 @@ mod tests {
 
             let mut all_maxed_state = GameStateBuilder::empty_state();
             let mut all_maxed_stats = PlayerStats::new_lineman(TeamType::Home);
-            all_maxed_stats.av = 11;
+            all_maxed_stats.set_av(11);
             all_maxed_state
                 .add_new_player_to_field(all_maxed_stats, maxed_pos)
                 .unwrap();
@@ -1179,6 +1234,194 @@ mod tests {
                 .get_dugout()
                 .filter(|player| player.stats.team == TeamType::Away)
                 .all(|player| !player.stats.has_temporary_skill(TemporarySkill::Loner2)));
+        }
+    }
+
+    mod greasy_cleats {
+        use crate::core::{
+            model::DugoutPlace,
+            table::{Skill, TemporarySkill},
+        };
+
+        use super::*;
+
+        fn activate_greasy_cleats(state: &mut GameState, team: TeamType, selection_roll: D16) {
+            let mut prayer = match PrayersToNuffle::new(team) {
+                AnyProc::PrayersToNuffle(proc) => proc,
+                _ => unreachable!(),
+            };
+
+            assert!(matches!(
+                prayer.step(state, ProcInput::Nothing),
+                ProcState::NeedRoll(RequestedRoll::D16)
+            ));
+
+            let ProcState::DoneNewProcs(mut procs) =
+                prayer.step(state, ProcInput::Roll(RollResult::D16(D16::Seven)))
+            else {
+                panic!("Greasy Cleats should enqueue its activator proc");
+            };
+
+            assert_eq!(procs.len(), 1);
+            let AnyProc::GreasyCleats(mut effect) = procs.pop().unwrap() else {
+                panic!("Expected Greasy Cleats activator proc");
+            };
+
+            assert!(matches!(
+                effect.step(state, ProcInput::Nothing),
+                ProcState::NeedRoll(RequestedRoll::D16)
+            ));
+            assert!(matches!(
+                effect.step(state, ProcInput::Roll(RollResult::D16(selection_roll))),
+                ProcState::Done
+            ));
+        }
+
+        #[test]
+        fn only_players_on_the_pitch_available_for_selection() {
+            let home_pos = Position::new((4, 5));
+            let away_pos = Position::new((5, 5));
+            let mut state = GameStateBuilder::empty_state();
+
+            let home_id = state
+                .add_new_player_to_field(PlayerStats::new_lineman(TeamType::Home), home_pos)
+                .unwrap();
+            let away_on_pitch_id = state
+                .add_new_player_to_field(PlayerStats::new_lineman(TeamType::Away), away_pos)
+                .unwrap();
+            state.dugout_add_new_player(
+                PlayerStats::new_lineman(TeamType::Away),
+                DugoutPlace::Reserves,
+            );
+
+            activate_greasy_cleats(&mut state, TeamType::Home, D16::One);
+
+            assert_eq!(state.get_player(home_id).unwrap().stats.ma(), 6);
+            assert_eq!(state.get_player(away_on_pitch_id).unwrap().stats.ma(), 5);
+            assert!(state
+                .get_dugout()
+                .filter(|player| player.stats.team == TeamType::Away)
+                .all(|player| player.stats.ma() == 6));
+        }
+
+        #[test]
+        fn players_with_loner_skill_not_selectable() {
+            let loner_pos = Position::new((5, 5));
+            let normal_pos = Position::new((6, 5));
+            let mut state = GameStateBuilder::empty_state();
+
+            let mut loner_stats = PlayerStats::new_lineman(TeamType::Away);
+            loner_stats.give_skill(Skill::Loner3);
+            let loner_id = state
+                .add_new_player_to_field(loner_stats, loner_pos)
+                .unwrap();
+            let normal_id = state
+                .add_new_player_to_field(PlayerStats::new_lineman(TeamType::Away), normal_pos)
+                .unwrap();
+
+            activate_greasy_cleats(&mut state, TeamType::Home, D16::One);
+
+            assert_eq!(state.get_player(loner_id).unwrap().stats.ma(), 6);
+            assert_eq!(state.get_player(normal_id).unwrap().stats.ma(), 5);
+        }
+
+        #[test]
+        fn movement_allowance_is_restored_at_the_end_of_the_drive() {
+            let start_pos = Position::new((2, 5));
+            let td_pos = Position::new((1, 5));
+            let away_pos = Position::new((5, 5));
+            let mut state = GameStateBuilder::new()
+                .add_home_player(start_pos)
+                .add_ball_pos(start_pos)
+                .build();
+
+            let away_id = state
+                .add_new_player_to_field(PlayerStats::new_lineman(TeamType::Away), away_pos)
+                .unwrap();
+            activate_greasy_cleats(&mut state, TeamType::Home, D16::One);
+            assert_eq!(state.get_player(away_id).unwrap().stats.ma(), 5);
+
+            state.step_positional(crate::core::table::PosAT::StartMove, start_pos);
+            state.step_positional(crate::core::table::PosAT::Move, td_pos);
+
+            assert_eq!(state.home.score, 1);
+            assert!(state
+                .get_dugout()
+                .filter(|player| player.stats.team == TeamType::Away)
+                .all(|player| player.stats.ma() == 6));
+        }
+
+        #[test]
+        fn player_with_movement_allowance_zero_should_not_be_elegible() {
+            let minimum_pos = Position::new((5, 5));
+            let normal_pos = Position::new((6, 5));
+            let mut state = GameStateBuilder::empty_state();
+
+            let mut minimum_stats = PlayerStats::new_lineman(TeamType::Away);
+            minimum_stats.set_ma(0);
+            let minimum_id = state
+                .add_new_player_to_field(minimum_stats, minimum_pos)
+                .unwrap();
+            let normal_id = state
+                .add_new_player_to_field(PlayerStats::new_lineman(TeamType::Away), normal_pos)
+                .unwrap();
+
+            activate_greasy_cleats(&mut state, TeamType::Home, D16::One);
+
+            assert_eq!(state.get_player(minimum_id).unwrap().stats.ma(), 1);
+            assert_eq!(state.get_player(normal_id).unwrap().stats.ma(), 5);
+
+            let mut all_minimum_state = GameStateBuilder::empty_state();
+            let mut all_minimum_stats = PlayerStats::new_lineman(TeamType::Away);
+            all_minimum_stats.set_ma(0);
+            all_minimum_state
+                .add_new_player_to_field(all_minimum_stats, minimum_pos)
+                .unwrap();
+
+            let mut effect = match GreasyCleats::new(TeamType::Home) {
+                AnyProc::GreasyCleats(proc) => proc,
+                _ => unreachable!(),
+            };
+
+            assert!(matches!(
+                effect.step(&mut all_minimum_state, ProcInput::Nothing),
+                ProcState::Done
+            ));
+        }
+
+        #[test]
+        fn player_that_already_has_temporary_reduced_movement_allowance_should_still_be_elegible() {
+            let away_pos = Position::new((5, 5));
+            let mut state = GameStateBuilder::empty_state();
+
+            let mut away_stats = PlayerStats::new_lineman(TeamType::Away);
+            away_stats.add_temporary_ma(-1);
+            let away_id = state.add_new_player_to_field(away_stats, away_pos).unwrap();
+
+            assert_eq!(state.get_player(away_id).unwrap().stats.ma(), 5);
+            activate_greasy_cleats(&mut state, TeamType::Home, D16::One);
+            assert_eq!(state.get_player(away_id).unwrap().stats.ma(), 4);
+        }
+
+        #[test]
+        fn players_with_temporary_loner_skill_not_selectable() {
+            let loner_pos = Position::new((5, 5));
+            let normal_pos = Position::new((6, 5));
+            let mut state = GameStateBuilder::empty_state();
+
+            let mut loner_stats = PlayerStats::new_lineman(TeamType::Away);
+            loner_stats.give_temporary_skill(TemporarySkill::Loner2);
+            let loner_id = state
+                .add_new_player_to_field(loner_stats, loner_pos)
+                .unwrap();
+            let normal_id = state
+                .add_new_player_to_field(PlayerStats::new_lineman(TeamType::Away), normal_pos)
+                .unwrap();
+
+            activate_greasy_cleats(&mut state, TeamType::Home, D16::One);
+
+            assert_eq!(state.get_player(loner_id).unwrap().stats.ma(), 6);
+            assert_eq!(state.get_player(normal_id).unwrap().stats.ma(), 5);
         }
     }
 }
