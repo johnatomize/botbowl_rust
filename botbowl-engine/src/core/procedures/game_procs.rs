@@ -45,6 +45,7 @@ impl Half {
         // celebrating this unusual method of scoring!
 
         Self::clear_temporary_rerolls(game_state);
+        //Todo: put these in two functions structured as clear_temporary_rerolls
         game_state.home.clear_friends_with_the_ref();
         game_state.away.clear_friends_with_the_ref();
         game_state.clear_temporary_skill_from_all_players(TemporarySkill::Stab);
