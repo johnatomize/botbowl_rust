@@ -463,6 +463,21 @@ impl Procedure for GreasyCleats {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BlessedStatueOfNuffle {
+    team: TeamType,
+
+}
+impl BlessedStatueOfNuffle {
+    fn new(team: TeamType) -> AnyProc {
+        AnyProc::BlessedStatueOfNuffle(BlessedStatueOfNuffle { team })
+    }
+}
+impl Procedure for BlessedStatueOfNuffle {
+    fn step(&mut self, game_state: &mut GameState, input: ProcInput) -> ProcState {
+        
+    }
+}
 #[cfg(test)]
 mod tests {
     use crate::core::{
@@ -1423,5 +1438,21 @@ mod tests {
             assert_eq!(state.get_player(loner_id).unwrap().stats.ma(), 6);
             assert_eq!(state.get_player(normal_id).unwrap().stats.ma(), 5);
         }
+    }
+
+    mod blessed_statue_of_nuffle {
+        use super::*;
+
+        #[test]
+        fn only_players_on_the_pitch_available_for_selection() { }
+        
+        #[test]
+        fn players_with_loner_skill_not_selectable() {}
+
+        #[test]
+        fn player_who_has_pro_skill_is_not_selectable() {}
+
+        #[test]
+        fn skill_is_lost_at_end_of_drive() {}
     }
 }
