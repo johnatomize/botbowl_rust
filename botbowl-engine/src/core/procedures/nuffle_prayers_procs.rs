@@ -55,9 +55,7 @@ impl Procedure for PrayersToNuffle {
                 procs.push(GreasyCleats::new(self.team));
             }
             D16::Eight => {
-                // Todo: implement Blessed Statue of Nuffle. The rules for Blessed Statue of Nuffle are:
-                // Choose one player on your team that is available to play during this drive and that does not have the Loner (X+) trait.
-                // Until the end of this game, that player gains the Pro skill.
+                procs.push(BlessedStatueOfNuffle::new(self.team));
             }
             D16::Nine => {
                 // Todo: implement Moles under the Pitch. The rules for Moles under the Pitch are:
@@ -466,16 +464,62 @@ impl Procedure for GreasyCleats {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BlessedStatueOfNuffle {
     team: TeamType,
-
 }
 impl BlessedStatueOfNuffle {
     fn new(team: TeamType) -> AnyProc {
         AnyProc::BlessedStatueOfNuffle(BlessedStatueOfNuffle { team })
     }
+
+    fn eligible_positions(&self, game_state: &GameState) -> Vec<Position> {
+        game_state
+            .get_players_on_pitch_in_team(self.team)
+            .filter(|player| {
+                !player.has_skill(Skill::Loner2)
+                    && !player.has_skill(Skill::Loner3)
+                    && !player.has_skill(Skill::Loner4)
+                    && !player.has_temporary_skill(TemporarySkill::Loner2)
+                    && !player.has_skill(Skill::Pro)
+                    && !player.has_temporary_skill(TemporarySkill::Pro)
+            })
+            .map(|player| player.position)
+            .collect()
+    }
 }
 impl Procedure for BlessedStatueOfNuffle {
     fn step(&mut self, game_state: &mut GameState, input: ProcInput) -> ProcState {
-        
+        let eligible_positions = self.eligible_positions(game_state);
+
+        if eligible_positions.is_empty() {
+            return ProcState::Done;
+        }
+
+        match input {
+            ProcInput::Nothing => {
+                let mut aa = AvailableActions::new(self.team);
+                aa.insert_positional(PosAT::SelectPosition, eligible_positions);
+                ProcState::NeedAction(aa)
+            }
+            ProcInput::Action(Action::Positional(PosAT::SelectPosition, pos)) => {
+                if !eligible_positions.contains(&pos) {
+                    return ProcState::NeedAction({
+                        let mut aa = AvailableActions::new(self.team);
+                        aa.insert_positional(PosAT::SelectPosition, eligible_positions);
+                        aa
+                    });
+                }
+
+                let id = game_state
+                    .get_player_id_at(pos)
+                    .expect("eligible position must contain a player");
+                game_state
+                    .get_mut_player(id)
+                    .expect("eligible player must still be on the pitch")
+                    .stats
+                    .give_temporary_skill(TemporarySkill::Pro);
+                ProcState::Done
+            }
+            _ => panic!("Unexpected input {:?}", input),
+        }
     }
 }
 #[cfg(test)]
@@ -1441,18 +1485,225 @@ mod tests {
     }
 
     mod blessed_statue_of_nuffle {
+        use crate::core::model::DugoutPlace;
+
         use super::*;
 
-        #[test]
-        fn only_players_on_the_pitch_available_for_selection() { }
-        
-        #[test]
-        fn players_with_loner_skill_not_selectable() {}
+        fn activate_blessed_statue_of_nuffle(
+            state: &mut GameState,
+            team: TeamType,
+            position: Position,
+        ) {
+            let mut prayer = match PrayersToNuffle::new(team) {
+                AnyProc::PrayersToNuffle(proc) => proc,
+                _ => unreachable!(),
+            };
+
+            assert!(matches!(
+                prayer.step(state, ProcInput::Nothing),
+                ProcState::NeedRoll(RequestedRoll::D16)
+            ));
+
+            let ProcState::DoneNewProcs(mut procs) =
+                prayer.step(state, ProcInput::Roll(RollResult::D16(D16::Eight)))
+            else {
+                panic!("Blessed Statue of Nuffle should enqueue its activator proc");
+            };
+
+            assert_eq!(procs.len(), 1);
+            let AnyProc::BlessedStatueOfNuffle(mut effect) = procs.pop().unwrap() else {
+                panic!("Expected Blessed Statue of Nuffle activator proc");
+            };
+
+            let ProcState::NeedAction(aa) = effect.step(state, ProcInput::Nothing) else {
+                panic!("Blessed Statue of Nuffle should require selecting an eligible player");
+            };
+            assert!(aa.is_legal_action(Action::Positional(PosAT::SelectPosition, position)));
+
+            assert!(matches!(
+                effect.step(
+                    state,
+                    ProcInput::Action(Action::Positional(PosAT::SelectPosition, position)),
+                ),
+                ProcState::Done
+            ));
+        }
 
         #[test]
-        fn player_who_has_pro_skill_is_not_selectable() {}
+        fn only_players_on_the_pitch_available_for_selection() {
+            let start_pos = Position::new((5, 5));
+            let mut state = GameStateBuilder::empty_state();
+
+            let on_pitch_id = state
+                .add_new_player_to_field(PlayerStats::new_lineman(TeamType::Home), start_pos)
+                .unwrap();
+            state.dugout_add_new_player(
+                PlayerStats::new_lineman(TeamType::Home),
+                DugoutPlace::Reserves,
+            );
+
+            activate_blessed_statue_of_nuffle(&mut state, TeamType::Home, start_pos);
+
+            assert!(state
+                .get_player(on_pitch_id)
+                .unwrap()
+                .has_temporary_skill(TemporarySkill::Pro));
+            assert!(state
+                .get_dugout()
+                .filter(|player| player.stats.team == TeamType::Home)
+                .all(|player| !player.stats.has_temporary_skill(TemporarySkill::Pro)));
+        }
 
         #[test]
-        fn skill_is_lost_at_end_of_drive() {}
+        fn players_with_loner_skill_not_selectable() {
+            let permanent_loner_pos = Position::new((5, 5));
+            let temporary_loner_pos = Position::new((6, 5));
+            let normal_pos = Position::new((7, 5));
+            let mut state = GameStateBuilder::empty_state();
+
+            let mut permanent_loner_stats = PlayerStats::new_lineman(TeamType::Home);
+            permanent_loner_stats.give_skill(Skill::Loner3);
+            let permanent_loner_id = state
+                .add_new_player_to_field(permanent_loner_stats, permanent_loner_pos)
+                .unwrap();
+
+            let mut temporary_loner_stats = PlayerStats::new_lineman(TeamType::Home);
+            temporary_loner_stats.give_temporary_skill(TemporarySkill::Loner2);
+            let temporary_loner_id = state
+                .add_new_player_to_field(temporary_loner_stats, temporary_loner_pos)
+                .unwrap();
+
+            let normal_id = state
+                .add_new_player_to_field(PlayerStats::new_lineman(TeamType::Home), normal_pos)
+                .unwrap();
+
+            let mut effect = match BlessedStatueOfNuffle::new(TeamType::Home) {
+                AnyProc::BlessedStatueOfNuffle(proc) => proc,
+                _ => unreachable!(),
+            };
+
+            let ProcState::NeedAction(aa) = effect.step(&mut state, ProcInput::Nothing) else {
+                panic!("Blessed Statue of Nuffle should require selecting an eligible player");
+            };
+            assert!(!aa.is_legal_action(Action::Positional(
+                PosAT::SelectPosition,
+                permanent_loner_pos
+            )));
+            assert!(!aa.is_legal_action(Action::Positional(
+                PosAT::SelectPosition,
+                temporary_loner_pos
+            )));
+            assert!(aa.is_legal_action(Action::Positional(PosAT::SelectPosition, normal_pos)));
+
+            assert!(matches!(
+                effect.step(
+                    &mut state,
+                    ProcInput::Action(Action::Positional(PosAT::SelectPosition, normal_pos)),
+                ),
+                ProcState::Done
+            ));
+
+            assert!(!state
+                .get_player(permanent_loner_id)
+                .unwrap()
+                .has_temporary_skill(TemporarySkill::Pro));
+            assert!(!state
+                .get_player(temporary_loner_id)
+                .unwrap()
+                .has_temporary_skill(TemporarySkill::Pro));
+            assert!(state
+                .get_player(normal_id)
+                .unwrap()
+                .has_temporary_skill(TemporarySkill::Pro));
+        }
+
+        #[test]
+        fn player_who_has_pro_skill_is_not_selectable() {
+            let permanent_pro_pos = Position::new((5, 5));
+            let temporary_pro_pos = Position::new((6, 5));
+            let normal_pos = Position::new((7, 5));
+            let mut state = GameStateBuilder::empty_state();
+
+            let mut permanent_pro_stats = PlayerStats::new_lineman(TeamType::Home);
+            permanent_pro_stats.give_skill(Skill::Pro);
+            let permanent_pro_id = state
+                .add_new_player_to_field(permanent_pro_stats, permanent_pro_pos)
+                .unwrap();
+
+            let mut temporary_pro_stats = PlayerStats::new_lineman(TeamType::Home);
+            temporary_pro_stats.give_temporary_skill(TemporarySkill::Pro);
+            let temporary_pro_id = state
+                .add_new_player_to_field(temporary_pro_stats, temporary_pro_pos)
+                .unwrap();
+
+            let normal_id = state
+                .add_new_player_to_field(PlayerStats::new_lineman(TeamType::Home), normal_pos)
+                .unwrap();
+
+            let mut effect = match BlessedStatueOfNuffle::new(TeamType::Home) {
+                AnyProc::BlessedStatueOfNuffle(proc) => proc,
+                _ => unreachable!(),
+            };
+
+            let ProcState::NeedAction(aa) = effect.step(&mut state, ProcInput::Nothing) else {
+                panic!("Blessed Statue of Nuffle should require selecting an eligible player");
+            };
+            assert!(!aa.is_legal_action(Action::Positional(
+                PosAT::SelectPosition,
+                permanent_pro_pos
+            )));
+            assert!(!aa.is_legal_action(Action::Positional(
+                PosAT::SelectPosition,
+                temporary_pro_pos
+            )));
+            assert!(aa.is_legal_action(Action::Positional(PosAT::SelectPosition, normal_pos)));
+
+            assert!(matches!(
+                effect.step(
+                    &mut state,
+                    ProcInput::Action(Action::Positional(PosAT::SelectPosition, normal_pos)),
+                ),
+                ProcState::Done
+            ));
+
+            assert!(!state
+                .get_player(permanent_pro_id)
+                .unwrap()
+                .has_temporary_skill(TemporarySkill::Pro));
+            assert!(state
+                .get_player(temporary_pro_id)
+                .unwrap()
+                .has_temporary_skill(TemporarySkill::Pro));
+            assert!(state
+                .get_player(normal_id)
+                .unwrap()
+                .has_temporary_skill(TemporarySkill::Pro));
+        }
+
+        #[test]
+        fn skill_is_not_lost_at_end_of_drive() {
+            let start_pos = Position::new((2, 5));
+            let td_pos = Position::new((1, 5));
+            let mut state = GameStateBuilder::new()
+                .add_home_player(start_pos)
+                .add_ball_pos(start_pos)
+                .build();
+
+            let id = state.get_player_id_at(start_pos).unwrap();
+            activate_blessed_statue_of_nuffle(&mut state, TeamType::Home, start_pos);
+            assert!(state
+                .get_player(id)
+                .unwrap()
+                .has_temporary_skill(TemporarySkill::Pro));
+
+            state.step_positional(crate::core::table::PosAT::StartMove, start_pos);
+            state.step_positional(crate::core::table::PosAT::Move, td_pos);
+
+            assert_eq!(state.home.score, 1);
+            assert!(state.get_dugout().any(|player| {
+                player.stats.team == TeamType::Home
+                    && player.stats.has_temporary_skill(TemporarySkill::Pro)
+            }));
+        }
     }
 }
